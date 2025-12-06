@@ -1,7 +1,7 @@
 -- Full Utility Menu Script
 -- Features: ESP Player, Combat Hitbox, FOV/Aimbot, ESP Text NPC, ESP Model (on-demand list), Misc (Fly)
--- Fixes: Tab Misc opens, Fly works, Model Hitbox excludes players + resets on toggle, adjustable Model Hitbox size,
---        Model list created on demand and does not overlap other UI.
+-- Updates: Team Filter unified for ESP + Aimbot + Hitbox; Fly fixed; Model Hitbox excludes players + resets on toggle; adjustable sizes.
+-- UI: Tabs = ESP, Combat, Misc, ESP Model; Model list appears only when "List Models" is pressed (no overlap).
 
 -- Services
 local Players = game:GetService("Players")
@@ -18,6 +18,7 @@ local menuVisible = true
 -- ESP players
 local highlightEnabled = false
 local highlightColor = Color3.fromRGB(0, 255, 128)
+local teamFilterEnabled = false -- Unified filter for ESP + Aimbot + Hitbox
 
 -- Combat
 local hitboxEnabled = false
@@ -63,13 +64,21 @@ local modelHitboxSize = 6
 local function getHumanoid(c) return c and c:FindFirstChildOfClass("Humanoid") end
 local function getHRP(c) return c and c:FindFirstChild("HumanoidRootPart") end
 local function getHead(c) return c and (c:FindFirstChild("Head") or c:FindFirstChildWhichIsA("BasePart")) end
-local function isAlive(p) return p and p~=LocalPlayer and p.Character and getHumanoid(p.Character) and getHumanoid(p.Character).Health>0 end
+local function sameTeam(a, b)
+    if not a or not b then return false end
+    return a.Team ~= nil and b.Team ~= nil and a.Team == b.Team
+end
+local function isAlive(p)
+    if not p or p == LocalPlayer or not p.Character then return false end
+    local hum = getHumanoid(p.Character)
+    return hum and hum.Health > 0
+end
 local function tableContains(t,v) for _,x in ipairs(t) do if x==v then return true end end return false end
 local function tableRemoveValue(t,v) for i=#t,1,-1 do if t[i]==v then table.remove(t,i) return true end end return false end
 
 -- Player ESP
 local function addPlayerHighlight(p)
-    if not p or p==LocalPlayer or not p.Character then return end
+    if not p or p == LocalPlayer or not p.Character then return end
     local hl = p.Character:FindFirstChild("PlayerHighlight")
     if not hl then
         hl = Instance.new("Highlight")
@@ -77,8 +86,24 @@ local function addPlayerHighlight(p)
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         hl.Parent = p.Character
     end
-    hl.Enabled = highlightEnabled
-    hl.FillColor = highlightColor
+
+    if not highlightEnabled then
+        hl.Enabled = false
+        return
+    end
+
+    -- Team filter: hide teammates, red for enemies
+    if teamFilterEnabled and sameTeam(p, LocalPlayer) then
+        hl.Enabled = false
+        return
+    end
+
+    hl.Enabled = true
+    if teamFilterEnabled and not sameTeam(p, LocalPlayer) then
+        hl.FillColor = Color3.fromRGB(255, 64, 64) -- enemy red
+    else
+        hl.FillColor = highlightColor
+    end
     hl.OutlineColor = Color3.new(1,1,1)
     hl.FillTransparency = 0.55
     hl.OutlineTransparency = 0.05
@@ -92,39 +117,64 @@ local function setupPlayerConnections(p)
         if hitboxEnabled then
             local hrp = getHRP(char)
             if hrp then
-                hrp.Size = Vector3.new(hitboxSize,hitboxSize,hitboxSize)
-                hrp.Transparency = 0.7
-                hrp.CanCollide = false
+                -- skip teammates when team filter ON
+                if teamFilterEnabled and sameTeam(p, LocalPlayer) then
+                    hrp.Size = Vector3.new(2,2,1)
+                    hrp.Transparency = 1
+                    hrp.CanCollide = true
+                else
+                    hrp.Size = Vector3.new(hitboxSize,hitboxSize,hitboxSize)
+                    hrp.Transparency = 0.7
+                    hrp.CanCollide = false
+                end
             end
         end
+    end)
+    p.CharacterRemoving:Connect(function(char)
+        local hl = char and char:FindFirstChild("PlayerHighlight")
+        if hl then hl:Destroy() end
     end)
     if p.Character then
         addPlayerHighlight(p)
         if hitboxEnabled then
             local hrp = getHRP(p.Character)
             if hrp then
-                hrp.Size = Vector3.new(hitboxSize,hitboxSize,hitboxSize)
-                hrp.Transparency = 0.7
-                hrp.CanCollide = false
+                if teamFilterEnabled and sameTeam(p, LocalPlayer) then
+                    hrp.Size = Vector3.new(2,2,1)
+                    hrp.Transparency = 1
+                    hrp.CanCollide = true
+                else
+                    hrp.Size = Vector3.new(hitboxSize,hitboxSize,hitboxSize)
+                    hrp.Transparency = 0.7
+                    hrp.CanCollide = false
+                end
             end
         end
     end
 end
 
--- Combat Hitbox (players)
+-- Combat Hitbox (players) with Team Filter
 local function applyHitboxToCharacter(p,c)
     if not p or p==LocalPlayer or not c then return end
     local hrp = getHRP(c)
-    if hrp then
-        if hitboxEnabled then
-            hrp.Size = Vector3.new(hitboxSize,hitboxSize,hitboxSize)
-            hrp.Transparency = 0.7
-            hrp.CanCollide = false
-        else
-            hrp.Size = Vector3.new(2,2,1)
-            hrp.Transparency = 1
-            hrp.CanCollide = true
-        end
+    if not hrp then return end
+
+    -- Team filter: teammates reset to default, enemies get hitbox when enabled
+    if teamFilterEnabled and sameTeam(p, LocalPlayer) then
+        hrp.Size = Vector3.new(2,2,1)
+        hrp.Transparency = 1
+        hrp.CanCollide = true
+        return
+    end
+
+    if hitboxEnabled then
+        hrp.Size = Vector3.new(hitboxSize,hitboxSize,hitboxSize)
+        hrp.Transparency = 0.7
+        hrp.CanCollide = false
+    else
+        hrp.Size = Vector3.new(2,2,1)
+        hrp.Transparency = 1
+        hrp.CanCollide = true
     end
 end
 
@@ -238,12 +288,17 @@ local function getClosestTargetInFOV()
     local best, bestDist = nil, math.huge
     for _,plr in ipairs(Players:GetPlayers()) do
         if isAlive(plr) and plr~=LocalPlayer then
-            local head = getHead(plr.Character)
-            if head then
-                local wp, onScreen = Camera:WorldToViewportPoint(head.Position)
-                if onScreen then
-                    local dist = (Vector2.new(wp.X, wp.Y) - Vector2.new(center.X, center.Y)).Magnitude
-                    if dist < bestDist and dist <= fovSize then bestDist = dist best = plr end
+            -- Team filter: skip teammates
+            if teamFilterEnabled and sameTeam(plr, LocalPlayer) then
+                -- skip
+            else
+                local head = getHead(plr.Character)
+                if head then
+                    local wp, onScreen = Camera:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(wp.X, wp.Y) - Vector2.new(center.X, center.Y)).Magnitude
+                        if dist < bestDist and dist <= fovSize then bestDist = dist best = plr end
+                    end
                 end
             end
         end
@@ -252,10 +307,6 @@ local function getClosestTargetInFOV()
 end
 
 -- Fly toggle (camera-direction)
-local miscFlyEnabled = false
-local miscFlySpeed = 60
-local flyConn = nil
-
 local function toggleFly()
     miscFlyEnabled = not miscFlyEnabled
     if miscFlyEnabled then
@@ -492,6 +543,15 @@ local function createMenu()
         hlBtn.MouseButton1Click:Connect(function()
             highlightEnabled = not highlightEnabled
             hlBtn.Text = "Highlight players: " .. (highlightEnabled and "ON" or "OFF")
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then addPlayerHighlight(p) end
+            end
+        end)
+
+        local teamBtn = makeButton(pane, "Team Filter: " .. (teamFilterEnabled and "ON" or "OFF"))
+        teamBtn.MouseButton1Click:Connect(function()
+            teamFilterEnabled = not teamFilterEnabled
+            teamBtn.Text = "Team Filter: " .. (teamFilterEnabled and "ON" or "OFF")
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character then addPlayerHighlight(p) end
             end
@@ -798,8 +858,12 @@ end)
 task.spawn(function()
     while true do
         task.wait(2)
-        if highlightEnabled then for _,p in ipairs(Players:GetPlayers()) do addPlayerHighlight(p) end end
-        if hitboxEnabled then for _,p in ipairs(Players:GetPlayers()) do applyHitboxToCharacter(p, p.Character) end end
+        if highlightEnabled then
+            for _,p in ipairs(Players:GetPlayers()) do addPlayerHighlight(p) end
+        end
+        if hitboxEnabled or teamFilterEnabled then
+            for _,p in ipairs(Players:GetPlayers()) do applyHitboxToCharacter(p, p.Character) end
+        end
         if espModelEnabled and #modelHighlightList > 0 then applyModelHighlight() end
         for _,obj in ipairs(workspace:GetDescendants()) do applyHitboxToModel(obj) end -- respects modelHitboxEnabled internally
     end
@@ -807,18 +871,25 @@ end)
 
 -- Infinite jump
 UserInputService.JumpRequest:Connect(function()
-    if miscInfiniteJump then local hum=getHumanoid(LocalPlayer.Character) if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end end
+    if miscInfiniteJump then
+        local hum=getHumanoid(LocalPlayer.Character)
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
 end)
 
 -- Noclip
 RunService.Stepped:Connect(function()
     if miscNoclip then
         local char = LocalPlayer.Character
-        if char then for _,part in ipairs(char:GetDescendants()) do if part:IsA("BasePart") then part.CanCollide=false end end end
+        if char then
+            for _,part in ipairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide=false end
+            end
+        end
     end
 end)
 
--- Fly follow
+-- Fly follow (optional)
 RunService.RenderStepped:Connect(function()
     if miscFlyFollowEnabled and miscTargetPlayer and miscTargetPlayer.Character then
         local myHRP = getHRP(LocalPlayer.Character)
