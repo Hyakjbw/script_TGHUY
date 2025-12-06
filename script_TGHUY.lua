@@ -1,7 +1,8 @@
 -- Full Utility Menu Script
--- Features: ESP Player, Combat Hitbox, FOV/Aimbot, ESP Text NPC, ESP Model (on-demand list), Misc (Fly)
--- Updates: Team Filter unified for ESP + Aimbot + Hitbox; Fly fixed; Model Hitbox excludes players + resets on toggle; adjustable sizes.
--- UI: Tabs = ESP, Combat, Misc, ESP Model; Model list appears only when "List Models" is pressed (no overlap).
+-- Features: ESP Player, Combat Hitbox, FOV/Aimbot (Team filter + distance slider + smooth 0.01..1.00),
+--           ESP Text NPC, ESP Model (on-demand list), Misc (Fly + FPS Booster MAX)
+-- Updates: Team Filter unified for ESP + Aimbot + Hitbox; Aim distance slider; Aim Smooth extended range; Fly fixed;
+--          Model Hitbox excludes players + resets on toggle; adjustable sizes; FPS Booster MAX one-time.
 
 -- Services
 local Players = game:GetService("Players")
@@ -27,10 +28,11 @@ local hitboxSize = 6
 -- Aimbot/FOV
 local fovEnabled = false
 local fovSize = 120
-local aimSmooth = 0.25
+local aimSmooth = 0.25 -- 0.01 .. 1.00
 local stickyTarget = nil
 local fovCircle = nil
 local hue = 0
+local aimMaxDistance = math.huge -- ∞ default
 
 -- Misc
 local miscInfiniteJump = false
@@ -296,8 +298,12 @@ local function getClosestTargetInFOV()
                 if head then
                     local wp, onScreen = Camera:WorldToViewportPoint(head.Position)
                     if onScreen then
-                        local dist = (Vector2.new(wp.X, wp.Y) - Vector2.new(center.X, center.Y)).Magnitude
-                        if dist < bestDist and dist <= fovSize then bestDist = dist best = plr end
+                        local distScreen = (Vector2.new(wp.X, wp.Y) - Vector2.new(center.X, center.Y)).Magnitude
+                        local dist3d = (head.Position - Camera.CFrame.Position).Magnitude
+                        if dist3d <= aimMaxDistance and distScreen < bestDist and distScreen <= fovSize then
+                            bestDist = distScreen
+                            best = plr
+                        end
                     end
                 end
             end
@@ -617,21 +623,101 @@ local function createMenu()
             fovGroup:FindFirstChildOfClass("TextLabel").Text = "FOV size: " .. tostring(fovSize)
         end)
 
-        -- Aim smooth adjust
+        -- Aim smooth adjust (extended range)
         local smoothGroup, smoothGrid = makeGroup(pane, ("Aim smooth: %.2f"):format(aimSmooth), 110)
         local smoothPlus = makeSmallButton(smoothGrid, "Smooth +")
         local smoothMinus = makeSmallButton(smoothGrid, "Smooth -")
         smoothPlus.MouseButton1Click:Connect(function()
-            aimSmooth = math.min(0.6, aimSmooth + 0.05)
+            aimSmooth = math.min(1.00, aimSmooth + 0.05)
             smoothGroup:FindFirstChildOfClass("TextLabel").Text = ("Aim smooth: %.2f"):format(aimSmooth)
         end)
         smoothMinus.MouseButton1Click:Connect(function()
-            aimSmooth = math.max(0.05, aimSmooth - 0.05)
+            aimSmooth = math.max(0.01, aimSmooth - 0.05)
             smoothGroup:FindFirstChildOfClass("TextLabel").Text = ("Aim smooth: %.2f"):format(aimSmooth)
+        end)
+
+        -- Aim distance slider (50m .. ∞)
+        local distGroup = Instance.new("Frame", pane)
+        distGroup.Size = UDim2.new(1, -12, 0, 70)
+        distGroup.BackgroundTransparency = 1
+
+        local distLabel = Instance.new("TextLabel", distGroup)
+        distLabel.Size = UDim2.new(1, 0, 0, 20)
+        distLabel.Text = "Aim distance: " .. (aimMaxDistance == math.huge and "∞" or tostring(math.floor(aimMaxDistance)).."m")
+        distLabel.TextColor3 = Color3.fromRGB(220,220,230)
+        distLabel.Font = Enum.Font.Gotham
+        distLabel.TextSize = 12
+        distLabel.BackgroundTransparency = 1
+        distLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+        local sliderBg = Instance.new("Frame", distGroup)
+        sliderBg.Size = UDim2.new(1, -12, 0, 20)
+        sliderBg.Position = UDim2.new(0, 6, 0, 28)
+        sliderBg.BackgroundColor3 = Color3.fromRGB(46, 48, 68)
+        sliderBg.BorderSizePixel = 0
+        createUICorner(sliderBg, 10)
+
+        local fill = Instance.new("Frame", sliderBg)
+        fill.Size = UDim2.new(1, 0, 1, 0)
+        fill.BackgroundColor3 = Color3.fromRGB(100, 120, 200)
+        fill.BorderSizePixel = 0
+        createUICorner(fill, 10)
+
+        local handle = Instance.new("Frame", sliderBg)
+        handle.Size = UDim2.new(0, 14, 1, 0)
+        handle.BackgroundColor3 = Color3.fromRGB(200, 210, 255)
+        handle.BorderSizePixel = 0
+        createUICorner(handle, 7)
+
+        local dragging = false
+        sliderBg.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+
+        local function setSliderByRel(rel)
+            rel = math.clamp(rel, 0, 1)
+            fill.Size = UDim2.new(rel, 0, 1, 0)
+            handle.Position = UDim2.new(rel, -7, 0, 0)
+            local maxRange = 2000 -- 2km
+            if rel >= 0.99 then
+                aimMaxDistance = math.huge
+                distLabel.Text = "Aim distance: ∞"
+            else
+                aimMaxDistance = 50 + rel*(maxRange-50)
+                distLabel.Text = "Aim distance: "..tostring(math.floor(aimMaxDistance)).."m"
+            end
+        end
+
+        -- init slider according to current aimMaxDistance
+        do
+            local relInit
+            if aimMaxDistance == math.huge then relInit = 1
+            else
+                local maxRange = 2000
+                relInit = (aimMaxDistance - 50)/(maxRange - 50)
+            end
+            setSliderByRel(relInit or 1)
+        end
+
+        RunService.RenderStepped:Connect(function()
+            if dragging then
+                local mouseX = UserInputService:GetMouseLocation().X
+                local absX = sliderBg.AbsolutePosition.X
+                local width = sliderBg.AbsoluteSize.X
+                local rel = (mouseX - absX)/width
+                setSliderByRel(rel)
+            end
         end)
     end
 
-    -- Misc Tab (fixed)
+    -- Misc Tab (fixed + FPS Booster MAX)
     local function showMisc()
         clearContent()
         local pane = makePane("Misc")
@@ -684,7 +770,27 @@ local function createMenu()
         -- Fly toggle (fixed)
         local flyBtn = makeButton(pane, "Fly: " .. (miscFlyEnabled and "ON" or "OFF"))
         flyBtn.MouseButton1Click:Connect(function()
-            toggleFly()
+            miscFlyEnabled = not miscFlyEnabled
+            if miscFlyEnabled then
+                if flyConn then flyConn:Disconnect() end
+                flyConn = RunService.RenderStepped:Connect(function()
+                    local hrp = getHRP(LocalPlayer.Character)
+                    if not hrp then return end
+                    local cam = Camera
+                    local move = Vector3.new()
+                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += cam.CFrame.UpVector end
+                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then move -= cam.CFrame.UpVector end
+                    if move.Magnitude > 0 then
+                        hrp.CFrame = hrp.CFrame + move.Unit * (miscFlySpeed/10)
+                    end
+                end)
+            else
+                if flyConn then flyConn:Disconnect() flyConn = nil end
+            end
             flyBtn.Text = "Fly: " .. (miscFlyEnabled and "ON" or "OFF")
         end)
 
@@ -699,6 +805,45 @@ local function createMenu()
         flyMinus.MouseButton1Click:Connect(function()
             miscFlySpeed = math.max(10, miscFlySpeed - 10)
             flyGroup:FindFirstChildOfClass("TextLabel").Text = "Fly speed: " .. tostring(miscFlySpeed)
+        end)
+
+        -- FPS Booster (one-time, MAX optimization)
+        local fpsBtn = makeButton(pane, "FPS Booster (MAX)")
+        fpsBtn.MouseButton1Click:Connect(function()
+            local lighting = game:GetService("Lighting")
+            lighting.GlobalShadows = false
+            lighting.FogEnd = 1e9
+            lighting.Brightness = 1
+            lighting.EnvironmentSpecularScale = 0
+            lighting.EnvironmentDiffuseScale = 0
+            for _,v in ipairs(lighting:GetChildren()) do
+                if v:IsA("PostEffect") then v.Enabled = false end
+            end
+
+            local terrain = workspace:FindFirstChildOfClass("Terrain")
+            if terrain then
+                terrain.WaterWaveSize = 0
+                terrain.WaterWaveSpeed = 0
+                terrain.WaterReflectance = 0
+                terrain.WaterTransparency = 1
+            end
+
+            for _,v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+                    v.Enabled = false
+                elseif v:IsA("Decal") or v:IsA("Texture") then
+                    v.Transparency = 1
+                elseif v:IsA("MeshPart") then
+                    v.RenderFidelity = Enum.RenderFidelity.Performance
+                end
+            end
+
+            workspace.StreamingEnabled = true
+            workspace.InterpolationThrottling = Enum.InterpolationThrottlingMode.Disabled
+
+            fpsBtn.Text = "FPS Booster Applied (MAX)"
+            fpsBtn.AutoButtonColor = false
+            fpsBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 60)
         end)
     end
 
@@ -924,8 +1069,11 @@ RunService.RenderStepped:Connect(function()
             if head then
                 local wp, onScreen = Camera:WorldToViewportPoint(head.Position)
                 local center = Camera.ViewportSize/2
-                local dist = (Vector2.new(wp.X, wp.Y) - Vector2.new(center.X, center.Y)).Magnitude
-                if (not onScreen) or dist > fovSize then stickyTarget = getClosestTargetInFOV() end
+                local distScreen = (Vector2.new(wp.X, wp.Y) - Vector2.new(center.X, center.Y)).Magnitude
+                local dist3d = (head.Position - Camera.CFrame.Position).Magnitude
+                if (not onScreen) or distScreen > fovSize or dist3d > aimMaxDistance then
+                    stickyTarget = getClosestTargetInFOV()
+                end
             else
                 stickyTarget = getClosestTargetInFOV()
             end
@@ -936,7 +1084,7 @@ RunService.RenderStepped:Connect(function()
             if head then
                 local current = Camera.CFrame
                 local target = CFrame.new(current.Position, head.Position)
-                Camera.CFrame = current:Lerp(target, math.clamp(aimSmooth, 0.05, 0.6))
+                Camera.CFrame = current:Lerp(target, math.clamp(aimSmooth, 0.01, 1.00))
             end
         end
     else
