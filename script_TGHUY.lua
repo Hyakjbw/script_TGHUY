@@ -1,4 +1,4 @@
--- Full Utility Menu Script
+-- Full Utility Menu Script 1.0
 -- Features: ESP Player, Combat Hitbox, FOV/Aimbot (Team filter + distance slider + smooth 0.01..1.00),
 --           ESP Text NPC, ESP Model (on-demand list), Misc (Fly + FPS Booster MAX)
 -- Updates: Team Filter unified for ESP + Aimbot + Hitbox; Aim distance slider; Aim Smooth extended range; Fly fixed;
@@ -564,14 +564,23 @@ local function createMenu()
         end)
 
         local colorGroup, colorGrid = makeGroup(pane, "ESP color", 110)
-        local c1 = makeSmallButton(colorGrid, "Green", Color3.fromRGB(0, 255, 128))
-        local c2 = makeSmallButton(colorGrid, "Red", Color3.fromRGB(255, 64, 64))
-        local c3 = makeSmallButton(colorGrid, "Blue", Color3.fromRGB(64, 128, 255))
-        local c4 = makeSmallButton(colorGrid, "Yellow", Color3.fromRGB(255, 225, 64))
-        c1.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(0, 255, 128); for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
-        c2.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(255, 64, 64); for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
-        c3.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(64, 128, 255); for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
-        c4.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(255, 225, 64); for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+        -- ESP color options (phiên bản 1.1)
+local c1 = makeSmallButton(colorGrid, "Green", Color3.fromRGB(0,255,128))
+local c2 = makeSmallButton(colorGrid, "Red", Color3.fromRGB(255,64,64))
+local c3 = makeSmallButton(colorGrid, "Blue", Color3.fromRGB(64,128,255))
+local c4 = makeSmallButton(colorGrid, "Yellow", Color3.fromRGB(255,225,64))
+-- thêm màu mới dễ nhìn
+local c5 = makeSmallButton(colorGrid, "White", Color3.fromRGB(255,255,255))
+local c6 = makeSmallButton(colorGrid, "Light Gray", Color3.fromRGB(220,220,220))
+local c7 = makeSmallButton(colorGrid, "Gray", Color3.fromRGB(200,200,200))
+
+c1.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(0,255,128); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+c2.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(255,64,64); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+c3.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(64,128,255); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+c4.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(255,225,64); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+c5.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(255,255,255); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+c6.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(220,220,220); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
+c7.MouseButton1Click:Connect(function() highlightColor = Color3.fromRGB(200,200,200); for _, p in ipairs(Players:GetPlayers()) do if p~=LocalPlayer and p.Character then addPlayerHighlight(p) end end end)
     end
 
     -- Combat Tab
