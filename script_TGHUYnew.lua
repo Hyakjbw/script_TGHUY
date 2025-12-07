@@ -27,10 +27,10 @@ local playerTextTags = {} -- Lưu trữ BillboardGui cho ESP
 
 -- Combat
 local hitboxEnabled = false
-local hitboxSize = 6
+local hitboxSize = 10
 local fovEnabled = false
-local fovSize = 120
-local aimSmooth = 0.25
+local fovSize = 40
+local aimSmooth = 0.50
 local stickyTarget = nil
 local fovCircle = nil
 local hue = 0
@@ -40,7 +40,7 @@ local aimMaxDistance = math.huge
 local miscInfiniteJump = false
 local miscNoclip = false
 local miscSpeedEnabled = false
-local miscSpeedValue = 24
+local miscSpeedValue = 30
 local originalWalkSpeed = 16
 local miscFlyEnabled = false
 local miscFlySpeed = 60
@@ -51,7 +51,7 @@ local followSpeed = 30
 local followConnection = nil 
 
 -- ESP Model
-local espModelEnabled = true
+local espModelEnabled = false
 local modelHighlightList = {}
 local ESPTextEnabled = false
 local ESPTextConnection = nil
@@ -932,7 +932,7 @@ local function createMenu()
             end
         end)
         
-        createSlider(contentFrame, "Hitbox Size", hitboxSize, 2, 1000, function(val)
+        createSlider(contentFrame, "Hitbox Size", hitboxSize, 2, 100, function(val)
             hitboxSize = val
             if hitboxEnabled then
                 for _, p in ipairs(Players:GetPlayers()) do
@@ -956,7 +956,7 @@ local function createMenu()
             aimSmooth = val / 100
         end)
         
-        createSlider(contentFrame, "Max Distance", math.min(aimMaxDistance, 1000000), 50, 1000000, function(val)
+        createSlider(contentFrame, "Max Distance", math.min(aimMaxDistance, 10000), 50, 10000, function(val)
             aimMaxDistance = val
         end)
     end
