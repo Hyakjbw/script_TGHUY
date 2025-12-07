@@ -1,322 +1,418 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trình Tạo Script Lua Thông Minh có Bộ Nhớ (Delta)</title>
-    <!-- Tải Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Thiết lập font cho giao diện */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Roboto+Mono:wght@400&display=swap');
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Roblox Lua Script Studio (Static)</title>
+  <meta name="description" content="Code editor Lua cho Roblox, snippet API, kiểm tra cú pháp, xuất .lua" />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* Nền xanh đậm */
-            color: #e2e8f0;
-            min-height: 100vh;
-        }
+  <!-- CodeMirror (Lua mode) -->
+  <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/lua/lua.js"></script>
 
-        .code-area, .chat-area {
-            background-color: #1e293b; /* Màu tối hơn cho khu vực code và chat */
-            border: 1px solid #475569;
-            font-family: 'Roboto Mono', monospace; /* Font đơn cách cho code */
-            font-size: 0.9rem;
-            color: #e2e8f0;
-            resize: none;
-            transition: all 0.2s;
-        }
-        
-        .chat-area {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.85rem;
-            overflow-y: auto;
-        }
+  <!-- Luaparse (syntax check) -->
+  <script src="https://cdn.jsdelivr.net/npm/luaparse@0.2.1/luaparse.min.js"></script>
 
-        .code-area:focus, .chat-area:focus {
-            outline: none;
-            border-color: #6366f1;
-            box-shadow: 0 0 0 1px #6366f1;
-        }
-
-        /* Styling cho nút loading spinner */
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.2);
-            border-top: 4px solid #ffffff;
-            border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            margin-right: 0.5rem;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
+  <!-- Simple styling -->
+  <style>
+    :root {
+      --bg: #0f1318;
+      --panel: #141a21;
+      --border: #263242;
+      --text: #e6edf3;
+      --muted: #a9b4c0;
+      --accent: #6bb3ff;
+      --error: #ff6b6b;
+      --ok: #67e480;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      position: sticky; top: 0; z-index: 2;
+    }
+    header h1 {
+      font-size: 16px; margin: 0; font-weight: 600;
+    }
+    header .actions {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    button, select, input[type="text"] {
+      background: #1a2028; color: var(--text); border: 1px solid var(--border);
+      padding: 8px 10px; border-radius: 8px; font-size: 14px;
+    }
+    button:hover { border-color: var(--accent); }
+    .layout {
+      display: grid; grid-template-columns: 300px 1fr 320px;
+      gap: 12px; padding: 12px;
+    }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+    .panel h2 {
+      font-size: 14px; margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--border);
+      background: #161c23; font-weight: 600;
+    }
+    .panel .content {
+      padding: 10px; max-height: calc(100vh - 130px); overflow: auto;
+    }
+    .snippet-list button {
+      width: 100%; text-align: left; margin-bottom: 8px;
+    }
+    .cm-s-material-darker.CodeMirror {
+      height: calc(100vh - 140px);
+      font-size: 14px;
+    }
+    .status {
+      margin-left: 12px; font-size: 13px;
+    }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--error); }
+    a.link { color: var(--accent); text-decoration: none; }
+    .api-item {
+      padding: 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+    }
+    .api-item .name { font-weight: 600; }
+    .api-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    .footer {
+      padding: 12px 16px; border-top: 1px solid var(--border); color: var(--muted);
+      font-size: 12px;
+    }
+    .badge { font-size: 11px; color: var(--muted); }
+  </style>
 </head>
-<body class="p-4 md:p-8 flex flex-col items-center">
-
-    <div class="w-full max-w-4xl space-y-6">
-        <h1 class="text-3xl md:text-4xl font-extrabold text-white mb-6 border-b-2 border-indigo-500 pb-2 text-center">
-            Trình Tạo Script Lua Thông Minh (Có Bộ Nhớ)
-        </h1>
-        
-        <!-- Cảnh báo/Thông báo -->
-        <div id="status-message" class="bg-indigo-900/50 text-indigo-200 p-3 rounded-lg border-l-4 border-indigo-400 font-medium transition duration-300">
-            Hệ thống đang hoạt động ở chế độ hội thoại. Yêu cầu của bạn được ghi nhớ để cập nhật script!
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Cột 1: Lịch sử Hội thoại và Input -->
-            <div>
-                <label class="text-lg font-semibold mb-2 block text-indigo-400">
-                    1. Lịch sử Hội thoại (Memory):
-                </label>
-                <!-- Khu vực hiển thị lịch sử -->
-                <div id="chat-history-display" class="chat-area w-full p-3 h-64 rounded-lg mb-4">
-                    -- Bắt đầu cuộc hội thoại mới --
-                </div>
-
-                <label for="request-input" class="text-lg font-semibold mb-2 block text-indigo-400">
-                    2. Yêu cầu CẬP NHẬT hoặc Sửa lỗi:
-                </label>
-                <textarea id="request-input" class="code-area w-full p-3 h-24 rounded-lg" 
-                    placeholder="Ví dụ: 'Dựa trên script đã tạo, thêm tùy chọn để tắt/mở chức năng bằng cách nhấn phím M.'"></textarea>
-
-                <!-- Nút Hành động -->
-                <div class="mt-4">
-                    <button onclick="generateScript()" id="generate-button" 
-                            class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 shadow-xl shadow-indigo-500/50 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
-                        <span id="button-text">Gửi Yêu Cầu (Tạo/Cập Nhật Script)</span>
-                        <div id="loading-spinner" class="spinner hidden"></div>
-                    </button>
-                    <button onclick="clearHistory()" 
-                            class="w-full mt-2 bg-red-700 hover:bg-red-600 text-white font-semibold py-2 px-6 rounded-lg transition duration-200 shadow-md">
-                        Xóa Bộ Nhớ Hội Thoại (Bắt đầu Script mới)
-                    </button>
-                </div>
-            </div>
-
-            <!-- Cột 2: Script Output -->
-            <div>
-                <label for="script-output" class="text-lg font-semibold mb-2 block text-green-400">
-                    3. Script Lua Đã Tạo/Cập Nhật:
-                </label>
-                <textarea id="script-output" class="code-area w-full p-3 h-[300px] rounded-lg" readonly 
-                    placeholder="Script Lua hoàn chỉnh sẽ xuất hiện ở đây. Sau mỗi yêu cầu cập nhật, script này sẽ thay đổi."></textarea>
-                
-                <button onclick="copyToClipboard()" id="copy-button"
-                        class="w-full mt-4 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
-                    Sao Chép Script
-                </button>
-            </div>
-        </div>
+<body>
+  <header>
+    <h1>Roblox Lua Script Studio <span class="badge">Static · GitHub Pages</span></h1>
+    <div class="actions">
+      <button id="btn-new">Tạo mới</button>
+      <button id="btn-check">Kiểm tra cú pháp</button>
+      <button id="btn-download">Tải về .lua</button>
+      <select id="theme">
+        <option value="material-darker" selected>Material Darker</option>
+        <option value="default">Default</option>
+      </select>
     </div>
+  </header>
 
-    <script>
-        // --- Cấu hình và Hằng số API ---
-        const MODEL_NAME = "gemini-2.5-flash-preview-09-2025";
-        const API_KEY = ""; // Sẽ được Canvas cung cấp
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${API_KEY}`;
-        
-        // Hướng dẫn hệ thống MỚI, tập trung vào tính tương thích với Mobile Executor VÀ bộ nhớ
-        const SYSTEM_INSTRUCTION = "You are an expert Roblox Lua developer specializing in creating high-performance, client-side (LocalScript) code specifically designed for mobile executors like Delta. You are maintaining a conversation memory and must output the FINAL, COMPLETE, and UPDATED Lua script based on the current request and all previous context. Your generated code MUST: 1) Be raw, executable Lua code with no explanations or markdown headers (e.g., no ```lua). 2) Focus on client-side functions and properties. 3) Be optimized to prevent excessive resource usage. Output ONLY the complete, current Lua script.";
+  <div class="layout">
+    <!-- Snippets -->
+    <section class="panel">
+      <h2>Snippet nhanh</h2>
+      <div class="content snippet-list" id="snippetList"></div>
+    </section>
 
-        // --- BIẾN TOÀN CỤC CHO BỘ NHỚ HỘI THOẠI ---
-        let chatHistory = []; 
+    <!-- Editor -->
+    <section class="panel">
+      <h2>Trình soạn thảo</h2>
+      <div class="content">
+        <textarea id="editor"></textarea>
+        <div class="status" id="status"></div>
+      </div>
+    </section>
 
-        // --- Tham chiếu DOM ---
-        const requestInput = document.getElementById('request-input');
-        const scriptOutput = document.getElementById('script-output');
-        const generateButton = document.getElementById('generate-button');
-        const copyButton = document.getElementById('copy-button');
-        const loadingSpinner = document.getElementById('loading-spinner');
-        const buttonText = document.getElementById('button-text');
-        const statusMessage = document.getElementById('status-message');
-        const chatHistoryDisplay = document.getElementById('chat-history-display');
+    <!-- API Explorer -->
+    <section class="panel">
+      <h2>API Roblox & tìm kiếm</h2>
+      <div class="content">
+        <input type="text" id="apiSearch" placeholder="Tìm class/hàm (vd: Players, :FindFirstChild, RunService)" />
+        <div id="apiList" style="margin-top:10px;"></div>
+        <div style="margin-top:12px; font-size:13px;">
+          Tham khảo chi tiết tại DevHub:
+          <a class="link" href="https://create.roblox.com/docs/reference/engine" target="_blank" rel="noopener">Engine Reference</a>
+        </div>
+      </div>
+    </section>
+  </div>
 
-        // --- CÁC HÀM TIỆN ÍCH ---
+  <div class="footer">
+    Mẹo: Luôn kiểm tra kĩ RemoteEvent/RemoteFunction và giới hạn quyền để tránh lạm dụng. Script nên tuân thủ chính sách Roblox.
+  </div>
 
-        /**
-         * Cập nhật hiển thị lịch sử chat trên UI
-         */
-        function updateChatDisplay(role, text) {
-            const prefix = role === 'user' ? '👤 Yêu Cầu: ' : '🤖 AI Script: ';
-            const color = role === 'user' ? 'text-blue-300' : 'text-green-300';
-            const content = document.createElement('div');
-            content.className = `mb-2 p-1 rounded ${color} whitespace-pre-wrap break-words`;
-            content.textContent = prefix + text.substring(0, 100) + (text.length > 100 ? '...' : '');
+  <script>
+    // -------- Snippets (có thể mở rộng/thay đổi) --------
+    const SNIPPETS = [
+      {
+        title: "Khởi tạo cơ bản",
+        code: `-- Khởi tạo dịch vụ
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
-            chatHistoryDisplay.appendChild(content);
-            // Cuộn xuống dưới cùng
-            chatHistoryDisplay.scrollTop = chatHistoryDisplay.scrollHeight;
-        }
+print("Script bắt đầu, số người chơi:", #Players:GetPlayers())`
+      },
+      {
+        title: "Hello World GUI",
+        code: `-- Tạo ScreenGui + TextLabel trong StarterGui
+local player = game:GetService("Players").LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "HelloGui"
+gui.ResetOnSpawn = false
+gui.Parent = player:WaitForChild("PlayerGui")
 
-        /**
-         * Thiết lập trạng thái loading của UI
-         */
-        function setLoadingState(isLoading) {
-            generateButton.disabled = isLoading;
-            copyButton.disabled = isLoading || scriptOutput.value.length === 0;
-            requestInput.disabled = isLoading;
-            
-            if (isLoading) {
-                loadingSpinner.classList.remove('hidden');
-                buttonText.textContent = 'Đang Xử Lý...';
-                statusMessage.className = 'bg-yellow-900/50 text-yellow-200 p-3 rounded-lg border-l-4 border-yellow-400 font-medium transition duration-300';
-                statusMessage.textContent = 'AI đang tạo hoặc cập nhật script dựa trên lịch sử hội thoại.';
-            } else {
-                loadingSpinner.classList.add('hidden');
-                buttonText.textContent = 'Gửi Yêu Cầu (Tạo/Cập Nhật Script)';
-            }
-        }
+local label = Instance.new("TextLabel")
+label.Size = UDim2.new(0, 300, 0, 50)
+label.Position = UDim2.new(0.5, -150, 0.1, 0)
+label.BackgroundTransparency = 0.3
+label.TextScaled = true
+label.TextColor3 = Color3.fromRGB(255, 255, 255)
+label.Text = "Xin chào, " .. player.Name .. "!"
+label.Parent = gui`
+      },
+      {
+        title: "Kết nối sự kiện nút",
+        code: `-- Tạo button và lắng nghe MouseButton1Click
+local player = game:GetService("Players").LocalPlayer
+local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+local btn = Instance.new("TextButton", gui)
+btn.Size = UDim2.new(0, 160, 0, 40)
+btn.Position = UDim2.new(0.5, -80, 0.2, 0)
+btn.Text = "Nhấn tôi"
 
-        /**
-         * Cố gắng sao chép nội dung script vào clipboard
-         */
-        function copyToClipboard() {
-            if (!scriptOutput.value) {
-                statusMessage.className = 'bg-red-900/50 text-red-200 p-3 rounded-lg border-l-4 border-red-400 font-medium transition duration-300';
-                statusMessage.textContent = 'Không có script để sao chép!';
-                return;
-            }
-            
-            scriptOutput.select();
-            scriptOutput.setSelectionRange(0, 99999); 
-            let success = false;
-            try {
-                success = document.execCommand('copy');
-            } catch (err) {
-                console.error('Không thể sao chép:', err);
-            }
-            
-            if (success) {
-                statusMessage.className = 'bg-green-900/50 text-green-200 p-3 rounded-lg border-l-4 border-green-400 font-medium transition duration-300';
-                statusMessage.textContent = 'Đã sao chép script vào clipboard thành công!';
-            } else {
-                 statusMessage.className = 'bg-red-900/50 text-red-200 p-3 rounded-lg border-l-4 border-red-400 font-medium transition duration-300';
-                statusMessage.textContent = 'Lỗi sao chép: Trình duyệt không hỗ trợ. Vui lòng sao chép thủ công.';
-            }
+btn.MouseButton1Click:Connect(function()
+  print("Button clicked!")
+end)`
+      },
+      {
+        title: "Tween một phần",
+        code: `-- Tween vị trí một Part
+local TweenService = game:GetService("TweenService")
+local part = workspace:FindFirstChild("Part")
+if not part then
+  warn("Không thấy Part trong Workspace"); return
+end
 
-            window.getSelection().removeAllRanges();
-            scriptOutput.blur();
-        }
-        
-        /**
-         * Xóa bộ nhớ hội thoại và UI
-         */
-        function clearHistory() {
-            chatHistory = [];
-            chatHistoryDisplay.innerHTML = '-- Bắt đầu cuộc hội thoại mới --';
-            scriptOutput.value = '';
-            setLoadingState(false);
-            statusMessage.className = 'bg-indigo-900/50 text-indigo-200 p-3 rounded-lg border-l-4 border-indigo-400 font-medium transition duration-300';
-            statusMessage.textContent = 'Đã xóa bộ nhớ. Bạn có thể bắt đầu tạo script mới.';
-        }
+local info = TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+local goal = { Position = part.Position + Vector3.new(0, 10, 0) }
+local tween = TweenService:Create(part, info, goal)
+tween:Play()`
+      },
+      {
+        title: "RemoteEvent: client -> server",
+        code: `-- Giả sử đã có RemoteEvent trong ReplicatedStorage
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local remote = ReplicatedStorage:WaitForChild("MyRemoteEvent")
 
-        /**
-         * Hàm gọi API Gemini để tạo script
-         */
-        async function generateScript() {
-            const userQuery = requestInput.value.trim();
+-- Client fire:
+remote:FireServer({ action = "Ping" })
 
-            if (!userQuery) {
-                statusMessage.className = 'bg-red-900/50 text-red-200 p-3 rounded-lg border-l-4 border-red-400 font-medium transition duration-300';
-                statusMessage.textContent = 'Vui lòng nhập yêu cầu của bạn.';
-                return;
-            }
+-- Server script (đặt trong ServerScriptService):
+-- local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- local remote = ReplicatedStorage:WaitForChild("MyRemoteEvent")
+-- remote.OnServerEvent:Connect(function(player, data)
+--   print("Nhận từ", player.Name, data.action)
+-- end)`
+      },
+      {
+        title: "RunService: Heartbeat",
+        code: `local RunService = game:GetService("RunService")
+local t = 0
+local conn; conn = RunService.Heartbeat:Connect(function(dt)
+  t += dt
+  if t >= 5 then
+    print("5s trôi qua"); conn:Disconnect()
+  end
+end)`
+      },
+      {
+        title: "CollectionService: tag & lấy",
+        code: `local CollectionService = game:GetService("CollectionService")
+local part = workspace:FindFirstChild("Part")
+if part then
+  CollectionService:AddTag(part, "Interactive")
+end
+for _, inst in ipairs(CollectionService:GetTagged("Interactive")) do
+  print("Tagged:", inst:GetFullName())
+end`
+      },
+      {
+        title: "Raycast cơ bản",
+        code: `local workspace = game:GetService("Workspace")
+local origin = Vector3.new(0, 50, 0)
+local direction = Vector3.new(0, -100, 0)
+local params = RaycastParams.new()
+params.FilterType = Enum.RaycastFilterType.Blacklist
+params.FilterDescendantsInstances = {}
 
-            setLoadingState(true);
+local result = workspace:Raycast(origin, direction, params)
+if result then
+  print("Va chạm:", result.Instance, result.Position)
+end`
+      },
+      {
+        title: "DataStore (server)",
+        code: `-- Chỉ chạy trên server
+local DataStoreService = game:GetService("DataStoreService")
+local ds = DataStoreService:GetDataStore("PlayerData")
 
-            // 1. Thêm tin nhắn mới của người dùng vào lịch sử
-            const userMessage = { role: "user", parts: [{ text: userQuery }] };
-            chatHistory.push(userMessage);
+game:GetService("Players").PlayerAdded:Connect(function(plr)
+  local key = "coins_" .. plr.UserId
+  local ok, val = pcall(function() return ds:GetAsync(key) end)
+  local coins = (ok and val) or 0
+  print(plr.Name .. " có " .. coins .. " coins")
+end)`
+      },
+      {
+        title: "Custom snippets (chèn khung)",
+        code: `-- Thêm snippet của bạn ở đây
+-- Ví dụ: helper logging
+local function log(msg)
+  print("[LOG]:", msg)
+end
 
-            // Cập nhật UI ngay lập tức
-            updateChatDisplay('user', userQuery);
-            requestInput.value = ''; // Xóa input
+log("Bắt đầu script")`
+      }
+    ];
 
-            // 2. Chuẩn bị payload với TOÀN BỘ lịch sử chat
-            const payload = {
-                contents: chatHistory,
-                systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-            };
+    // -------- API index (rút gọn, bạn có thể mở rộng) --------
+    const API_ITEMS = [
+      { name: "Players", kind: "Service", sample: "local Players = game:GetService(\"Players\")" },
+      { name: "ReplicatedStorage", kind: "Service", sample: "local ReplicatedStorage = game:GetService(\"ReplicatedStorage\")" },
+      { name: "StarterGui", kind: "Service", sample: "local StarterGui = game:GetService(\"StarterGui\")" },
+      { name: "ServerScriptService", kind: "Service", sample: "local SSS = game:GetService(\"ServerScriptService\")" },
+      { name: "RunService", kind: "Service", sample: "local RunService = game:GetService(\"RunService\")" },
+      { name: "TweenService", kind: "Service", sample: "local TweenService = game:GetService(\"TweenService\")" },
+      { name: "CollectionService", kind: "Service", sample: "local CollectionService = game:GetService(\"CollectionService\")" },
+      { name: "UserInputService", kind: "Service", sample: "local UIS = game:GetService(\"UserInputService\")" },
+      { name: "ContextActionService", kind: "Service", sample: "local CAS = game:GetService(\"ContextActionService\")" },
+      { name: "Workspace", kind: "Service", sample: "local Workspace = game:GetService(\"Workspace\")" },
+      { name: "RemoteEvent:FireServer", kind: "Method", sample: "remote:FireServer(data)" },
+      { name: "RemoteEvent:FireClient", kind: "Method", sample: "remote:FireClient(player, data)" },
+      { name: "Instance.new", kind: "Function", sample: "local part = Instance.new(\"Part\")" },
+      { name: "FindFirstChild", kind: "Method", sample: "local x = parent:FindFirstChild(\"Name\")" },
+      { name: "WaitForChild", kind: "Method", sample: "local x = parent:WaitForChild(\"Name\")" },
+      { name: "Connect (RBXScriptSignal)", kind: "Method", sample: "signal:Connect(function(...) end)" },
+      { name: "Raycast", kind: "Method", sample: "local r = workspace:Raycast(origin, direction, params)" },
+      { name: "DataStoreService:GetDataStore", kind: "Method", sample: "local ds = DataStoreService:GetDataStore(\"Name\")" },
+      { name: "pcall", kind: "Function", sample: "local ok, res = pcall(function() return f() end)" },
+    ];
 
-            let response;
-            const MAX_RETRIES = 5;
-            let delay = 1000;
+    // -------- Setup Editor --------
+    const editorEl = document.getElementById('editor');
+    const statusEl = document.getElementById('status');
+    const cm = CodeMirror.fromTextArea(editorEl, {
+      mode: "lua",
+      theme: "material-darker",
+      lineNumbers: true,
+      indentUnit: 2,
+      tabSize: 2,
+      smartIndent: true,
+      autofocus: true,
+    });
 
-            for (let i = 0; i < MAX_RETRIES; i++) {
-                try {
-                    response = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+    // Default content
+    cm.setValue(`-- Roblox Lua Script
+-- Bắt đầu từ snippet để nhanh hơn hoặc viết mới
+-- Nhấn "Kiểm tra cú pháp" để phát hiện lỗi cơ bản
+print("Xin chào Roblox!")`);
 
-                    if (response.status === 429 && i < MAX_RETRIES - 1) {
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2;
-                        continue;
-                    }
+    // Theme switch
+    document.getElementById('theme').addEventListener('change', (e) => {
+      cm.setOption('theme', e.target.value);
+    });
 
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
+    // New file
+    document.getElementById('btn-new').addEventListener('click', () => {
+      if (confirm('Xóa nội dung hiện tại và tạo mới?')) {
+        cm.setValue('-- File mới\n');
+        statusEl.textContent = '';
+      }
+    });
 
-                    const result = await response.json();
-                    
-                    const generatedText = result?.candidates?.[0]?.content?.parts?.[0]?.text || 
-                                           "Lỗi: Không thể nhận phản hồi code từ AI. Vui lòng thử lại.";
+    // Syntax check
+    document.getElementById('btn-check').addEventListener('click', () => {
+      try {
+        luaparse.parse(cm.getValue(), { luaVersion: '5.1', locations: true });
+        statusEl.textContent = 'Cú pháp OK';
+        statusEl.className = 'status ok';
+      } catch (err) {
+        statusEl.textContent = 'Lỗi cú pháp: ' + err.message;
+        statusEl.className = 'status err';
+      }
+    });
 
-                    // Loại bỏ Markdown Lua headers nếu AI lỡ thêm vào
-                    const cleanedScript = generatedText
-                        .replace(/^```lua\s*/i, '')
-                        .replace(/\s*```$/, '');
+    // Download .lua
+    document.getElementById('btn-download').addEventListener('click', () => {
+      const blob = new Blob([cm.getValue()], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'script.lua';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
 
-                    scriptOutput.value = cleanedScript.trim();
+    // Render snippet list
+    const snippetListEl = document.getElementById('snippetList');
+    SNIPPETS.forEach((s, idx) => {
+      const btn = document.createElement('button');
+      btn.textContent = s.title;
+      btn.addEventListener('click', () => {
+        const doc = cm.getDoc();
+        const cursor = doc.getCursor();
+        doc.replaceRange("\n" + s.code + "\n", cursor);
+      });
+      snippetListEl.appendChild(btn);
+    });
 
-                    // 3. Thêm phản hồi của AI vào lịch sử chat
-                    const aiMessage = { role: "model", parts: [{ text: cleanedScript }] };
-                    chatHistory.push(aiMessage);
-                    updateChatDisplay('model', "Script Updated"); // Hiển thị thông báo cập nhật ngắn gọn
+    // API search & render
+    const apiListEl = document.getElementById('apiList');
+    const apiSearchEl = document.getElementById('apiSearch');
 
-                    if (cleanedScript.includes("Lỗi:") || cleanedScript.length < 10) {
-                        statusMessage.className = 'bg-red-900/50 text-red-200 p-3 rounded-lg border-l-4 border-red-400 font-medium transition duration-300';
-                        statusMessage.textContent = "AI gặp lỗi. Vui lòng thử lại hoặc xóa bộ nhớ.";
-                    } else {
-                        statusMessage.className = 'bg-green-900/50 text-green-200 p-3 rounded-lg border-l-4 border-green-400 font-medium transition duration-300';
-                        statusMessage.textContent = "Đã cập nhật script thành công! (Tối ưu cho Mobile).";
-                    }
-                    
-                    break; 
-
-                } catch (error) {
-                    console.error('Fetch error:', error);
-                    scriptOutput.value = `--[[ Lỗi Kết Nối API ]]--\n-- Không thể kết nối đến AI: ${error.message}`;
-                    // Xóa tin nhắn người dùng cuối cùng khỏi lịch sử nếu xảy ra lỗi
-                    chatHistory.pop(); 
-                    statusMessage.className = 'bg-red-900/50 text-red-200 p-3 rounded-lg border-l-4 border-red-400 font-medium transition duration-300';
-                    statusMessage.textContent = `Lỗi kết nối hoặc API: ${error.message}. Vui lòng thử lại.`;
-                    break;
-                } finally {
-                    setLoadingState(false);
-                }
-            }
-        }
-
-        // --- Khởi tạo ---
-        document.addEventListener('DOMContentLoaded', () => {
-            copyButton.disabled = true;
-            scriptOutput.addEventListener('input', () => {
-                copyButton.disabled = scriptOutput.value.length === 0;
-            });
-            setLoadingState(false);
+    function renderAPI(list) {
+      apiListEl.innerHTML = '';
+      list.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'api-item';
+        div.innerHTML = `
+          <div class="name">${item.name}</div>
+          <div class="muted">${item.kind}</div>
+          <div class="api-actions">
+            <button class="btn-insert">Chèn mẫu</button>
+            <a class="link" target="_blank" rel="noopener"
+              href="https://create.roblox.com/docs/search?search=${encodeURIComponent(item.name)}">Xem trên DevHub</a>
+          </div>
+        `;
+        const btn = div.querySelector('.btn-insert');
+        btn.addEventListener('click', () => {
+          const doc = cm.getDoc();
+          const cursor = doc.getCursor();
+          doc.replaceRange("\n" + item.sample + "\n", cursor);
         });
-    </script>
+        apiListEl.appendChild(div);
+      });
+    }
+
+    function filterAPI(q) {
+      q = q.trim().toLowerCase();
+      if (!q) return API_ITEMS;
+      return API_ITEMS.filter(it => it.name.toLowerCase().includes(q) || it.kind.toLowerCase().includes(q));
+    }
+
+    apiSearchEl.addEventListener('input', () => {
+      renderAPI(filterAPI(apiSearchEl.value));
+    });
+
+    renderAPI(API_ITEMS);
+  </script>
 </body>
 </html>
-
-
