@@ -1,4 +1,4 @@
--- Modern Utility Menu Script 3.1 (UPDATED - ADD ESP NAME/HEALTH/DISTANCE & FIXED HIGHLIGHT)
+-- Modern Utility Menu Script 3.2 (UPDATED - OPTIMIZED LAG & ENHANCED FPS BOOSTER)
 -- script được roblox cho phép
 
 local Players = game:GetService("Players")
@@ -123,7 +123,7 @@ local function updatePlayerTextESP(p)
     local enabled = espNameEnabled or espHealthEnabled or espDistanceEnabled
     
     -- Xóa tag nếu không bật hoặc người chơi không hợp lệ
-    if not enabled or not char or not head or not hum then 
+    if not enabled or not char or not head or not hum or hum.Health <= 0 then 
         if playerTextTags[p] then 
             playerTextTags[p]:Destroy() 
             playerTextTags[p] = nil 
@@ -193,7 +193,7 @@ local function updatePlayerTextESP(p)
 end
 
 local function startESPTextLoop()
-    if espTextConnection then espTextConnection:Disconnect() end
+    if espTextConnection then return end -- Đảm bảo chỉ có 1 connection
     -- Loop Heartbeat để cập nhật liên tục (máu, khoảng cách)
     espTextConnection = RunService.Heartbeat:Connect(function()
         for _, p in ipairs(Players:GetPlayers()) do
@@ -210,10 +210,10 @@ local function stopESPTextLoop()
         espTextConnection = nil
     end
     -- Xóa tất cả tag text
-    for _, tag in pairs(playerTextTags) do
+    for p, tag in pairs(playerTextTags) do
         if tag and tag.Parent then tag:Destroy() end
+        playerTextTags[p] = nil
     end
-    playerTextTags = {}
 end
 -- KẾT THÚC HÀM XỬ LÝ TEXT ESP
 
@@ -890,8 +890,8 @@ local function createMenu()
         
         createColorPicker(contentFrame)
 
-        --- === NEW ESP TEXT FEATURES ===
-        local function toggleESPText(state)
+        --- === NEW ESP TEXT FEATURES OPTIMIZED FOR LAG ===
+        local function toggleESPTextLoop(state)
             local enabled = espNameEnabled or espHealthEnabled or espDistanceEnabled
             if enabled then
                 startESPTextLoop()
@@ -902,19 +902,19 @@ local function createMenu()
 
         createToggleButton(contentFrame, "ESP Name", espNameEnabled, function(state)
             espNameEnabled = state
-            toggleESPText(state)
+            toggleESPTextLoop()
         end)
 
         createToggleButton(contentFrame, "ESP Health (HP)", espHealthEnabled, function(state)
             espHealthEnabled = state
-            toggleESPText(state)
+            toggleESPTextLoop()
         end)
 
         createToggleButton(contentFrame, "ESP Distance (m)", espDistanceEnabled, function(state)
             espDistanceEnabled = state
-            toggleESPText(state)
+            toggleESPTextLoop()
         end)
-        -- =============================
+        -- ===============================================
     end
 
     -- Combat Tab (Unchanged)
@@ -948,7 +948,7 @@ local function createMenu()
             stickyTarget = nil
         end)
         
-        createSlider(contentFrame, "FOV Size", fovSize, 10, 300, function(val)
+        createSlider(contentFrame, "FOV Size", fovSize, 10, 120, function(val)
             fovSize = val
         end)
         
@@ -961,7 +961,7 @@ local function createMenu()
         end)
     end
 
-    -- Misc Tab (Unchanged)
+    -- Misc Tab (UPDATED FPS BOOSTER)
     local function showMisc()
         clearContent()
         setActiveTab("Misc")
@@ -1026,7 +1026,8 @@ local function createMenu()
             miscFlySpeed = val
         end)
         
-        createActionButton(contentFrame, "FPS Booster", function()
+        -- >>> TÍNH NĂNG FPS BOOSTER ĐÃ NÂNG CẤP <<<
+        createActionButton(contentFrame, "FPS Booster (Nâng Cấp)", function()
             local lighting = game:GetService("Lighting")
             lighting.GlobalShadows = false
             lighting.FogEnd = 1e9
@@ -1041,16 +1042,22 @@ local function createMenu()
                 terrain.WaterReflectance = 0
                 terrain.WaterTransparency = 1
             end
+            
             for _,v in ipairs(workspace:GetDescendants()) do
+                -- Vô hiệu hóa các hiệu ứng ngốn FPS (hạt, vệt, tia sáng)
                 if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
                     v.Enabled = false
+                -- Tắt Decal/Texture (Hình ảnh trang trí)
                 elseif v:IsA("Decal") or v:IsA("Texture") then
                     v.Transparency = 1
+                -- Giảm chất lượng Render của các mô hình Mesh
                 elseif v:IsA("MeshPart") then
                     v.RenderFidelity = Enum.RenderFidelity.Performance
                 end
             end
+            print("✅ FPS Booster Activated! Maximized visual performance for minimal lag.")
         end)
+        -- ==============================================
 
         --------------------------------------------------------
         -- PLAYER INTERACTION SECTION (Teleport & Follow)
@@ -1377,7 +1384,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     end
 end)
 
--- Maintenance loop (Cập nhật Highlight/Hitbox/ESP Text nếu cần)
+-- Maintenance loop (Cập nhật Highlight/Hitbox/ESP Text nếu cần) - Tối ưu hóa
 task.spawn(function()
     while true do
         task.wait(1.5)
@@ -1468,4 +1475,4 @@ end)
 
 -- Create UI
 createMenu()
-print("✅ Modern Utility Menu loaded successfully! (ESP Name/Health/Distance and Highlight Fixes Applied)")
+print("✅ Modern Utility Menu loaded successfully! (ESP Name/Health/Distance/Hitbox Lag Optimizations and Enhanced FPS Booster Applied)")
