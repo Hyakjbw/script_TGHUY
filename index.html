@@ -1,418 +1,70 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Roblox Lua Script Studio (Static)</title>
-  <meta name="description" content="Code editor Lua cho Roblox, snippet API, kiểm tra cú pháp, xuất .lua" />
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
-  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
-
-  <!-- CodeMirror (Lua mode) -->
-  <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.css" rel="stylesheet">
-  <link href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/lua/lua.js"></script>
-
-  <!-- Luaparse (syntax check) -->
-  <script src="https://cdn.jsdelivr.net/npm/luaparse@0.2.1/luaparse.min.js"></script>
-
-  <!-- Simple styling -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trợ lý AI RapidAPI</title>
   <style>
-    :root {
-      --bg: #0f1318;
-      --panel: #141a21;
-      --border: #263242;
-      --text: #e6edf3;
-      --muted: #a9b4c0;
-      --accent: #6bb3ff;
-      --error: #ff6b6b;
-      --ok: #67e480;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      background: var(--panel);
-      position: sticky; top: 0; z-index: 2;
-    }
-    header h1 {
-      font-size: 16px; margin: 0; font-weight: 600;
-    }
-    header .actions {
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
-    button, select, input[type="text"] {
-      background: #1a2028; color: var(--text); border: 1px solid var(--border);
-      padding: 8px 10px; border-radius: 8px; font-size: 14px;
-    }
-    button:hover { border-color: var(--accent); }
-    .layout {
-      display: grid; grid-template-columns: 300px 1fr 320px;
-      gap: 12px; padding: 12px;
-    }
-    .panel {
-      background: var(--panel); border: 1px solid var(--border);
-      border-radius: 10px; overflow: hidden;
-    }
-    .panel h2 {
-      font-size: 14px; margin: 0; padding: 10px 12px; border-bottom: 1px solid var(--border);
-      background: #161c23; font-weight: 600;
-    }
-    .panel .content {
-      padding: 10px; max-height: calc(100vh - 130px); overflow: auto;
-    }
-    .snippet-list button {
-      width: 100%; text-align: left; margin-bottom: 8px;
-    }
-    .cm-s-material-darker.CodeMirror {
-      height: calc(100vh - 140px);
-      font-size: 14px;
-    }
-    .status {
-      margin-left: 12px; font-size: 13px;
-    }
-    .status.ok { color: var(--ok); }
-    .status.err { color: var(--error); }
-    a.link { color: var(--accent); text-decoration: none; }
-    .api-item {
-      padding: 8px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
-    }
-    .api-item .name { font-weight: 600; }
-    .api-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-    .footer {
-      padding: 12px 16px; border-top: 1px solid var(--border); color: var(--muted);
-      font-size: 12px;
-    }
-    .badge { font-size: 11px; color: var(--muted); }
+    body { font-family: system-ui, sans-serif; margin: 16px; }
+    .container { max-width: 640px; margin: 0 auto; }
+    textarea { width: 100%; height: 120px; }
+    button { padding: 10px 16px; margin-top: 8px; }
+    .answer { white-space: pre-wrap; margin-top: 12px; border: 1px solid #ddd; padding: 12px; border-radius: 8px; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Roblox Lua Script Studio <span class="badge">Static · GitHub Pages</span></h1>
-    <div class="actions">
-      <button id="btn-new">Tạo mới</button>
-      <button id="btn-check">Kiểm tra cú pháp</button>
-      <button id="btn-download">Tải về .lua</button>
-      <select id="theme">
-        <option value="material-darker" selected>Material Darker</option>
-        <option value="default">Default</option>
-      </select>
-    </div>
-  </header>
-
-  <div class="layout">
-    <!-- Snippets -->
-    <section class="panel">
-      <h2>Snippet nhanh</h2>
-      <div class="content snippet-list" id="snippetList"></div>
-    </section>
-
-    <!-- Editor -->
-    <section class="panel">
-      <h2>Trình soạn thảo</h2>
-      <div class="content">
-        <textarea id="editor"></textarea>
-        <div class="status" id="status"></div>
-      </div>
-    </section>
-
-    <!-- API Explorer -->
-    <section class="panel">
-      <h2>API Roblox & tìm kiếm</h2>
-      <div class="content">
-        <input type="text" id="apiSearch" placeholder="Tìm class/hàm (vd: Players, :FindFirstChild, RunService)" />
-        <div id="apiList" style="margin-top:10px;"></div>
-        <div style="margin-top:12px; font-size:13px;">
-          Tham khảo chi tiết tại DevHub:
-          <a class="link" href="https://create.roblox.com/docs/reference/engine" target="_blank" rel="noopener">Engine Reference</a>
-        </div>
-      </div>
-    </section>
-  </div>
-
-  <div class="footer">
-    Mẹo: Luôn kiểm tra kĩ RemoteEvent/RemoteFunction và giới hạn quyền để tránh lạm dụng. Script nên tuân thủ chính sách Roblox.
+  <div class="container">
+    <h1>Trợ lý AI RapidAPI</h1>
+    <label for="prompt">Nhập câu hỏi:</label>
+    <textarea id="prompt" placeholder="Ví dụ: Hello"></textarea>
+    <button id="askBtn">Hỏi AI</button>
+    <div id="answer" class="answer"></div>
   </div>
 
   <script>
-    // -------- Snippets (có thể mở rộng/thay đổi) --------
-    const SNIPPETS = [
-      {
-        title: "Khởi tạo cơ bản",
-        code: `-- Khởi tạo dịch vụ
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+    const askBtn = document.getElementById('askBtn');
+    const promptEl = document.getElementById('prompt');
+    const answerEl = document.getElementById('answer');
 
-print("Script bắt đầu, số người chơi:", #Players:GetPlayers())`
-      },
-      {
-        title: "Hello World GUI",
-        code: `-- Tạo ScreenGui + TextLabel trong StarterGui
-local player = game:GetService("Players").LocalPlayer
-local gui = Instance.new("ScreenGui")
-gui.Name = "HelloGui"
-gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
-
-local label = Instance.new("TextLabel")
-label.Size = UDim2.new(0, 300, 0, 50)
-label.Position = UDim2.new(0.5, -150, 0.1, 0)
-label.BackgroundTransparency = 0.3
-label.TextScaled = true
-label.TextColor3 = Color3.fromRGB(255, 255, 255)
-label.Text = "Xin chào, " .. player.Name .. "!"
-label.Parent = gui`
-      },
-      {
-        title: "Kết nối sự kiện nút",
-        code: `-- Tạo button và lắng nghe MouseButton1Click
-local player = game:GetService("Players").LocalPlayer
-local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-local btn = Instance.new("TextButton", gui)
-btn.Size = UDim2.new(0, 160, 0, 40)
-btn.Position = UDim2.new(0.5, -80, 0.2, 0)
-btn.Text = "Nhấn tôi"
-
-btn.MouseButton1Click:Connect(function()
-  print("Button clicked!")
-end)`
-      },
-      {
-        title: "Tween một phần",
-        code: `-- Tween vị trí một Part
-local TweenService = game:GetService("TweenService")
-local part = workspace:FindFirstChild("Part")
-if not part then
-  warn("Không thấy Part trong Workspace"); return
-end
-
-local info = TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
-local goal = { Position = part.Position + Vector3.new(0, 10, 0) }
-local tween = TweenService:Create(part, info, goal)
-tween:Play()`
-      },
-      {
-        title: "RemoteEvent: client -> server",
-        code: `-- Giả sử đã có RemoteEvent trong ReplicatedStorage
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local remote = ReplicatedStorage:WaitForChild("MyRemoteEvent")
-
--- Client fire:
-remote:FireServer({ action = "Ping" })
-
--- Server script (đặt trong ServerScriptService):
--- local ReplicatedStorage = game:GetService("ReplicatedStorage")
--- local remote = ReplicatedStorage:WaitForChild("MyRemoteEvent")
--- remote.OnServerEvent:Connect(function(player, data)
---   print("Nhận từ", player.Name, data.action)
--- end)`
-      },
-      {
-        title: "RunService: Heartbeat",
-        code: `local RunService = game:GetService("RunService")
-local t = 0
-local conn; conn = RunService.Heartbeat:Connect(function(dt)
-  t += dt
-  if t >= 5 then
-    print("5s trôi qua"); conn:Disconnect()
-  end
-end)`
-      },
-      {
-        title: "CollectionService: tag & lấy",
-        code: `local CollectionService = game:GetService("CollectionService")
-local part = workspace:FindFirstChild("Part")
-if part then
-  CollectionService:AddTag(part, "Interactive")
-end
-for _, inst in ipairs(CollectionService:GetTagged("Interactive")) do
-  print("Tagged:", inst:GetFullName())
-end`
-      },
-      {
-        title: "Raycast cơ bản",
-        code: `local workspace = game:GetService("Workspace")
-local origin = Vector3.new(0, 50, 0)
-local direction = Vector3.new(0, -100, 0)
-local params = RaycastParams.new()
-params.FilterType = Enum.RaycastFilterType.Blacklist
-params.FilterDescendantsInstances = {}
-
-local result = workspace:Raycast(origin, direction, params)
-if result then
-  print("Va chạm:", result.Instance, result.Position)
-end`
-      },
-      {
-        title: "DataStore (server)",
-        code: `-- Chỉ chạy trên server
-local DataStoreService = game:GetService("DataStoreService")
-local ds = DataStoreService:GetDataStore("PlayerData")
-
-game:GetService("Players").PlayerAdded:Connect(function(plr)
-  local key = "coins_" .. plr.UserId
-  local ok, val = pcall(function() return ds:GetAsync(key) end)
-  local coins = (ok and val) or 0
-  print(plr.Name .. " có " .. coins .. " coins")
-end)`
-      },
-      {
-        title: "Custom snippets (chèn khung)",
-        code: `-- Thêm snippet của bạn ở đây
--- Ví dụ: helper logging
-local function log(msg)
-  print("[LOG]:", msg)
-end
-
-log("Bắt đầu script")`
+    askBtn.addEventListener('click', async () => {
+      const userPrompt = promptEl.value.trim();
+      if (!userPrompt) {
+        answerEl.textContent = "Vui lòng nhập câu hỏi.";
+        return;
       }
-    ];
 
-    // -------- API index (rút gọn, bạn có thể mở rộng) --------
-    const API_ITEMS = [
-      { name: "Players", kind: "Service", sample: "local Players = game:GetService(\"Players\")" },
-      { name: "ReplicatedStorage", kind: "Service", sample: "local ReplicatedStorage = game:GetService(\"ReplicatedStorage\")" },
-      { name: "StarterGui", kind: "Service", sample: "local StarterGui = game:GetService(\"StarterGui\")" },
-      { name: "ServerScriptService", kind: "Service", sample: "local SSS = game:GetService(\"ServerScriptService\")" },
-      { name: "RunService", kind: "Service", sample: "local RunService = game:GetService(\"RunService\")" },
-      { name: "TweenService", kind: "Service", sample: "local TweenService = game:GetService(\"TweenService\")" },
-      { name: "CollectionService", kind: "Service", sample: "local CollectionService = game:GetService(\"CollectionService\")" },
-      { name: "UserInputService", kind: "Service", sample: "local UIS = game:GetService(\"UserInputService\")" },
-      { name: "ContextActionService", kind: "Service", sample: "local CAS = game:GetService(\"ContextActionService\")" },
-      { name: "Workspace", kind: "Service", sample: "local Workspace = game:GetService(\"Workspace\")" },
-      { name: "RemoteEvent:FireServer", kind: "Method", sample: "remote:FireServer(data)" },
-      { name: "RemoteEvent:FireClient", kind: "Method", sample: "remote:FireClient(player, data)" },
-      { name: "Instance.new", kind: "Function", sample: "local part = Instance.new(\"Part\")" },
-      { name: "FindFirstChild", kind: "Method", sample: "local x = parent:FindFirstChild(\"Name\")" },
-      { name: "WaitForChild", kind: "Method", sample: "local x = parent:WaitForChild(\"Name\")" },
-      { name: "Connect (RBXScriptSignal)", kind: "Method", sample: "signal:Connect(function(...) end)" },
-      { name: "Raycast", kind: "Method", sample: "local r = workspace:Raycast(origin, direction, params)" },
-      { name: "DataStoreService:GetDataStore", kind: "Method", sample: "local ds = DataStoreService:GetDataStore(\"Name\")" },
-      { name: "pcall", kind: "Function", sample: "local ok, res = pcall(function() return f() end)" },
-    ];
+      answerEl.textContent = "Đang xử lý...";
 
-    // -------- Setup Editor --------
-    const editorEl = document.getElementById('editor');
-    const statusEl = document.getElementById('status');
-    const cm = CodeMirror.fromTextArea(editorEl, {
-      mode: "lua",
-      theme: "material-darker",
-      lineNumbers: true,
-      indentUnit: 2,
-      tabSize: 2,
-      smartIndent: true,
-      autofocus: true,
-    });
-
-    // Default content
-    cm.setValue(`-- Roblox Lua Script
--- Bắt đầu từ snippet để nhanh hơn hoặc viết mới
--- Nhấn "Kiểm tra cú pháp" để phát hiện lỗi cơ bản
-print("Xin chào Roblox!")`);
-
-    // Theme switch
-    document.getElementById('theme').addEventListener('change', (e) => {
-      cm.setOption('theme', e.target.value);
-    });
-
-    // New file
-    document.getElementById('btn-new').addEventListener('click', () => {
-      if (confirm('Xóa nội dung hiện tại và tạo mới?')) {
-        cm.setValue('-- File mới\n');
-        statusEl.textContent = '';
-      }
-    });
-
-    // Syntax check
-    document.getElementById('btn-check').addEventListener('click', () => {
       try {
-        luaparse.parse(cm.getValue(), { luaVersion: '5.1', locations: true });
-        statusEl.textContent = 'Cú pháp OK';
-        statusEl.className = 'status ok';
+        const resp = await fetch("https://copilot5.p.rapidapi.com/copilot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-rapidapi-host": "copilot5.p.rapidapi.com",
+            "x-rapidapi-key": "c6aebc88c4mshbb27395a49228cfp1aafbdjsn7da6b8a2718" // KHÓA API của bạn
+          },
+          body: JSON.stringify({
+            message: userPrompt,
+            conversation_id: null,
+            mode: "CHAT",
+            markdown: true
+          }),
+        });
+
+        const data = await resp.json();
+        if (!resp.ok) {
+          answerEl.textContent = "Lỗi: " + (data?.error || resp.status);
+          return;
+        }
+
+        answerEl.textContent = data?.reply
+          ? (typeof data.reply === "string" ? data.reply : JSON.stringify(data.reply, null, 2))
+          : JSON.stringify(data, null, 2);
       } catch (err) {
-        statusEl.textContent = 'Lỗi cú pháp: ' + err.message;
-        statusEl.className = 'status err';
+        answerEl.textContent = "Có lỗi xảy ra. Vui lòng thử lại.";
+        console.error(err);
       }
     });
-
-    // Download .lua
-    document.getElementById('btn-download').addEventListener('click', () => {
-      const blob = new Blob([cm.getValue()], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'script.lua';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    });
-
-    // Render snippet list
-    const snippetListEl = document.getElementById('snippetList');
-    SNIPPETS.forEach((s, idx) => {
-      const btn = document.createElement('button');
-      btn.textContent = s.title;
-      btn.addEventListener('click', () => {
-        const doc = cm.getDoc();
-        const cursor = doc.getCursor();
-        doc.replaceRange("\n" + s.code + "\n", cursor);
-      });
-      snippetListEl.appendChild(btn);
-    });
-
-    // API search & render
-    const apiListEl = document.getElementById('apiList');
-    const apiSearchEl = document.getElementById('apiSearch');
-
-    function renderAPI(list) {
-      apiListEl.innerHTML = '';
-      list.forEach(item => {
-        const div = document.createElement('div');
-        div.className = 'api-item';
-        div.innerHTML = `
-          <div class="name">${item.name}</div>
-          <div class="muted">${item.kind}</div>
-          <div class="api-actions">
-            <button class="btn-insert">Chèn mẫu</button>
-            <a class="link" target="_blank" rel="noopener"
-              href="https://create.roblox.com/docs/search?search=${encodeURIComponent(item.name)}">Xem trên DevHub</a>
-          </div>
-        `;
-        const btn = div.querySelector('.btn-insert');
-        btn.addEventListener('click', () => {
-          const doc = cm.getDoc();
-          const cursor = doc.getCursor();
-          doc.replaceRange("\n" + item.sample + "\n", cursor);
-        });
-        apiListEl.appendChild(div);
-      });
-    }
-
-    function filterAPI(q) {
-      q = q.trim().toLowerCase();
-      if (!q) return API_ITEMS;
-      return API_ITEMS.filter(it => it.name.toLowerCase().includes(q) || it.kind.toLowerCase().includes(q));
-    }
-
-    apiSearchEl.addEventListener('input', () => {
-      renderAPI(filterAPI(apiSearchEl.value));
-    });
-
-    renderAPI(API_ITEMS);
   </script>
 </body>
 </html>
