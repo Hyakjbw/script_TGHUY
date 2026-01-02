@@ -1,5 +1,39 @@
--- Modern Utility Menu Script 3.2 (UPDATED - OPTIMIZED LAG & ENHANCED FPS BOOSTER)
--- script được roblox cho phép
+-- Modern Utility Menu Script 4.5 (Final Fix Model ESP & Smart Lighting)
+-- Updated by AI Assistant based on Request
+-- Script optimized for Mobile Executors
+
+-- ########################################################
+-- [ANTI-CHEAT BYPASS SYSTEM]
+-- Dựa trên dữ liệu scan, chặn RemoteEvent "OnPunishment"
+-- ########################################################
+local function secure_bypass()
+    local success, err = pcall(function()
+        local mt = getrawmetatable(game)
+        local old_namecall = mt.__namecall
+        setreadonly(mt, false)
+
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            local args = {...}
+
+            -- Kiểm tra nếu game đang cố gửi tín hiệu trừng phạt lên server
+            if method == "FireServer" and self.Name == "OnPunishment" and self.Parent and self.Parent.Name == "FJsMovementAnticheat" then
+                -- Chặn cuộc gọi này (Return nil)
+                return nil
+            end
+
+            return old_namecall(self, ...)
+        end)
+        setreadonly(mt, true)
+        print("✅ Anti-Cheat (FJsMovementAnticheat) Bypassed Successfully!")
+    end)
+    
+    if not success then
+        warn("⚠️ Bypass Warning: Executor might not support hookmetamethod. Anti-cheat might be active.")
+    end
+end
+secure_bypass()
+-- ########################################################
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -8,6 +42,8 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui") 
 
 -- Global states
 local menuVisible = true
@@ -17,17 +53,19 @@ local currentTab = "ESP"
 local highlightEnabled = false
 local highlightColor = Color3.fromRGB(0, 255, 128)
 local teamFilterEnabled = false
--- === BIẾN MỚI CHO ESP NÂNG CAO ===
+-- === BIẾN CHO ESP NÂNG CAO ===
 local espNameEnabled = false
 local espHealthEnabled = false
 local espDistanceEnabled = false
 local espTextConnection = nil
-local playerTextTags = {} -- Lưu trữ BillboardGui cho ESP
+local playerTextTags = {} 
 -----------------------------------
 
 -- Combat
 local hitboxEnabled = false
 local hitboxSize = 10
+local headHitboxEnabled = false
+local headHitboxSize = 5
 local fovEnabled = false
 local fovSize = 40
 local aimSmooth = 0.50
@@ -42,22 +80,62 @@ local miscNoclip = false
 local miscSpeedEnabled = false
 local miscSpeedValue = 30
 local originalWalkSpeed = 16
+
+-- Fly Variables
 local miscFlyEnabled = false
 local miscFlySpeed = 60
 local flyConn = nil
+local flyControlConnection = nil 
+local flyControl = {f = 0, b = 0, l = 0, r = 0, u = 0, d = 0} 
+local flySpeedV3 = 50 
+
+-- Player Interaction Variables
 local currentTargetPlayer = nil
 local isFollowingPlayer = false
 local followSpeed = 30
 local followConnection = nil 
 
--- ESP Model
+-- Bring All Variables
+local miscBringAllEnabled = false
+local bringAllConnection = nil
+
+-- Lighting Variables (Smart Restore)
+local miscFullBrightEnabled = false 
+local fullBrightConnection = nil 
+local miscFogEnabled = false
+local originalLightingState = {
+    Brightness = 1,
+    ClockTime = 14,
+    FogEnd = 10000,
+    FogStart = 0,
+    Ambient = Color3.fromRGB(127, 127, 127),
+    OutdoorAmbient = Color3.fromRGB(127, 127, 127),
+    GlobalShadows = true
+}
+
+-- Function Tab Variables
+local godModeEnabled = false
+local invisibleEnabled = false
+local spinBotEnabled = false
+local spinBotSpeed = 20
+local instantPromptEnabled = false 
+local godModeConnection = nil
+local invisibleConnection = nil
+local spinBotConnection = nil
+local instantPromptConnection = nil
+
+-- === MODEL ESP VARIABLES (RE-FIXED) ===
 local espModelEnabled = false
-local modelHighlightList = {}
-local ESPTextEnabled = false
-local ESPTextConnection = nil
+local modelHighlightList = {} -- Danh sách tên model cần tìm
+local cachedModels = {} -- Cache danh sách model instance
+local ESPTextEnabled = false -- ESP Text cho Model
 local modelHitboxEnabled = false
 local modelHitboxSize = 6
 local showingModelList = false
+local modelNotifyEnabled = false 
+local modelNotifyDistance = 100 
+local lastNotifyTime = 0 
+local modelESPConnection = nil 
 
 -- Helper functions
 local function getHumanoid(c) return c and c:FindFirstChildOfClass("Humanoid") end
@@ -75,7 +153,40 @@ end
 local function tableContains(t,v) for _,x in ipairs(t) do if x==v then return true end end return false end
 local function tableRemoveValue(t,v) for i=#t,1,-1 do if t[i]==v then table.remove(t,i) return true end end return false end
 
--- Player ESP Highlight (FIXED LOGIC)
+-- Hàm gửi thông báo
+local function sendNotification(title, text)
+    StarterGui:SetCore("SendNotification", {
+        Title = title;
+        Text = text;
+        Duration = 3;
+    })
+end
+
+-- === LIGHTING HELPER FUNCTIONS ===
+local function saveOriginalLighting()
+    originalLightingState.Brightness = Lighting.Brightness
+    originalLightingState.ClockTime = Lighting.ClockTime
+    originalLightingState.FogEnd = Lighting.FogEnd
+    originalLightingState.FogStart = Lighting.FogStart
+    originalLightingState.Ambient = Lighting.Ambient
+    originalLightingState.OutdoorAmbient = Lighting.OutdoorAmbient
+    originalLightingState.GlobalShadows = Lighting.GlobalShadows
+end
+
+local function restoreLighting()
+    Lighting.Brightness = originalLightingState.Brightness
+    Lighting.ClockTime = originalLightingState.ClockTime
+    Lighting.Ambient = originalLightingState.Ambient
+    Lighting.OutdoorAmbient = originalLightingState.OutdoorAmbient
+    Lighting.GlobalShadows = originalLightingState.GlobalShadows
+end
+
+local function restoreFog()
+    Lighting.FogEnd = originalLightingState.FogEnd
+    Lighting.FogStart = originalLightingState.FogStart
+end
+
+-- Player ESP Highlight
 local function addPlayerHighlight(p)
     if not p or p == LocalPlayer or not p.Character then 
         return 
@@ -101,7 +212,6 @@ local function addPlayerHighlight(p)
         return
     end
 
-    -- Nếu bật và không cùng team (hoặc không dùng team filter) -> Bật highlight
     hl.Enabled = true
     if teamFilterEnabled and not sameTeam(p, LocalPlayer) then
         hl.FillColor = Color3.fromRGB(255, 64, 64)
@@ -113,17 +223,18 @@ local function addPlayerHighlight(p)
     hl.OutlineTransparency = 0.05
 end
 
--- === HÀM MỚI: XỬ LÝ TEXT ESP CHO NGƯỜI CHƠI (TÊN, MÁU, KHOẢNG CÁCH) ===
+-- === HÀM XỬ LÝ TEXT ESP PLAYER ===
 local function updatePlayerTextESP(p)
     if p == LocalPlayer then return end
     local char = p.Character
+    if not char then return end
+    
     local head = getHead(char)
     local hum = getHumanoid(char)
     
     local enabled = espNameEnabled or espHealthEnabled or espDistanceEnabled
     
-    -- Xóa tag nếu không bật hoặc người chơi không hợp lệ
-    if not enabled or not char or not head or not hum or hum.Health <= 0 then 
+    if not enabled or not head or not hum or hum.Health <= 0 then 
         if playerTextTags[p] then 
             playerTextTags[p]:Destroy() 
             playerTextTags[p] = nil 
@@ -132,14 +243,14 @@ local function updatePlayerTextESP(p)
     end
     
     local tag = playerTextTags[p]
-    if not tag then
+    if not tag or not tag.Parent then
         tag = Instance.new("BillboardGui")
         tag.Name = "PlayerESPText"
         tag.Size = UDim2.new(0, 150, 0, 80) 
         tag.StudsOffset = Vector3.new(0, 3.5, 0)
         tag.AlwaysOnTop = true
         tag.ExtentsOffset = Vector3.new(0, 0, 0)
-        tag.Parent = char
+        tag.Parent = char 
         playerTextTags[p] = tag
 
         local textLabel = Instance.new("TextLabel")
@@ -155,27 +266,24 @@ local function updatePlayerTextESP(p)
         textLabel.Parent = tag
     end
     
-    tag.Adornee = head
+    if tag.Adornee ~= head then
+        tag.Adornee = head
+    end
     
     local text = ""
     
-    -- 1. Tên
     if espNameEnabled then
         text = text .. p.Name .. "\n"
     end
     
-    -- 2. Máu (Health)
     if espHealthEnabled and hum.Health > 0 then
         local health = math.floor(hum.Health + 0.5)
         local maxHealth = hum.MaxHealth
-        -- Tạo màu dựa trên % máu
         local hueValue = math.clamp(health/maxHealth * 0.35, 0, 0.35)
         local healthColor = Color3.fromHSV(hueValue, 1, 1) 
-        
         text = text .. "<font color=\"rgb(" .. math.floor(healthColor.R*255) .. "," .. math.floor(healthColor.G*255) .. "," .. math.floor(healthColor.B*255) .. ")\">[" .. health .. " HP]</font>\n"
     end
 
-    -- 3. Khoảng cách (Distance)
     if espDistanceEnabled and getHRP(LocalPlayer.Character) and getHRP(char) then
         local localHRP = getHRP(LocalPlayer.Character)
         local targetHRP = getHRP(char)
@@ -193,8 +301,7 @@ local function updatePlayerTextESP(p)
 end
 
 local function startESPTextLoop()
-    if espTextConnection then return end -- Đảm bảo chỉ có 1 connection
-    -- Loop Heartbeat để cập nhật liên tục (máu, khoảng cách)
+    if espTextConnection then return end 
     espTextConnection = RunService.Heartbeat:Connect(function()
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer and p.Character then
@@ -209,24 +316,25 @@ local function stopESPTextLoop()
         espTextConnection:Disconnect()
         espTextConnection = nil
     end
-    -- Xóa tất cả tag text
     for p, tag in pairs(playerTextTags) do
         if tag and tag.Parent then tag:Destroy() end
         playerTextTags[p] = nil
     end
 end
--- KẾT THÚC HÀM XỬ LÝ TEXT ESP
 
 -- Combat Hitbox
 local function applyHitboxToCharacter(p,c)
     if not p or p==LocalPlayer or not c then return end
     local hrp = getHRP(c)
-    if not hrp then return end
+    local head = getHead(c)
+    if not hrp or not head then return end
 
     if teamFilterEnabled and sameTeam(p, LocalPlayer) then
         hrp.Size = Vector3.new(2,2,1)
         hrp.Transparency = 1
         hrp.CanCollide = true
+        head.Size = Vector3.new(1,1,1)
+        head.Transparency = 1
         return
     end
 
@@ -239,37 +347,231 @@ local function applyHitboxToCharacter(p,c)
         hrp.Transparency = 1
         hrp.CanCollide = true
     end
+    
+    if headHitboxEnabled then 
+        head.Size = Vector3.new(headHitboxSize, headHitboxSize, headHitboxSize)
+        head.Transparency = 0.7
+    else
+        head.Size = Vector3.new(1, 1, 1) 
+        head.Transparency = 1
+    end
 end
 
--- Setup Player Connections (FIXED - ĐẢM BẢO HIGHLIGHT/ESP/HITBOX ÁP DỤNG KHI VÀO GAME VÀ HỒI SINH)
+-- Setup Player Connections
 local function setupPlayerConnections(p)
     if not p or p==LocalPlayer then return end
     
     local function onCharacterAdded(char)
-        task.wait(0.1) -- Đợi nhân vật load hoàn chỉnh
-
-        -- 1. Apply Highlight (Luôn gọi để đảm bảo tính năng hoạt động)
+        task.wait(0.3)
         addPlayerHighlight(p) 
-        
-        -- 2. Apply Hitbox
         applyHitboxToCharacter(p, char)
-        
-        -- 3. Cập nhật ESP Text Tag (Nếu tính năng bật, nó sẽ được cập nhật trong loop)
         if espNameEnabled or espHealthEnabled or espDistanceEnabled then
             updatePlayerTextESP(p)
         end
     end
     
     p.CharacterAdded:Connect(onCharacterAdded)
-    
-    -- Nếu người chơi đã có nhân vật (khi vào game)
     if p.Character then
         onCharacterAdded(p.Character)
     end
 end
--- KẾT THÚC HÀM XỬ LÝ PLAYER CONNECTION
 
--- Model functions (Unchanged)
+-- =========================================================
+-- OPTIMIZED MODEL ESP & FUNCTIONS (FIXED REMOVAL)
+-- =========================================================
+
+-- Làm mới danh sách Cache
+local function refreshModelCache()
+    cachedModels = {}
+    -- Quét toàn bộ workspace
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and tableContains(modelHighlightList, obj.Name) and not Players:GetPlayerFromCharacter(obj) then
+            table.insert(cachedModels, obj)
+        end
+    end
+end
+
+-- Xóa visual của một Model cụ thể (Dùng khi bỏ tick trong list)
+local function clearSpecificModelVisuals(modelName)
+    -- Quét cache hiện tại để xóa
+    for i, model in ipairs(cachedModels) do
+        if model and model.Name == modelName then
+             local hl = model:FindFirstChild("ModelHighlight")
+             if hl then hl:Destroy() end
+             
+             local tag = model:FindFirstChild("ModelNameTag")
+             if tag then tag:Destroy() end
+             
+             -- Reset Hitbox
+             local hrp = model:FindFirstChild("HumanoidRootPart")
+             if hrp then
+                 hrp.Size = Vector3.new(2, 2, 1)
+                 hrp.Transparency = 1
+                 hrp.CanCollide = true
+             end
+        end
+    end
+    -- Ngoài ra quét thêm workspace phòng hờ
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name == modelName then
+             local hl = obj:FindFirstChild("ModelHighlight")
+             if hl then hl:Destroy() end
+             local tag = obj:FindFirstChild("ModelNameTag")
+             if tag then tag:Destroy() end
+        end
+    end
+end
+
+-- Hàm dọn dẹp TOÀN BỘ visual khi tắt nút tổng
+local function clearAllModelVisuals()
+    for _, model in ipairs(cachedModels) do
+        if model then
+            local hl = model:FindFirstChild("ModelHighlight")
+            if hl then hl:Destroy() end
+            
+            local tag = model:FindFirstChild("ModelNameTag")
+            if tag then tag:Destroy() end
+
+            local hrp = model:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                hrp.Size = Vector3.new(2, 2, 1)
+                hrp.Transparency = 1
+                hrp.CanCollide = true
+            end
+        end
+    end
+    -- Quét lại workspace một lần nữa để chắc chắn sạch sẽ
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local hl = obj:FindFirstChild("ModelHighlight")
+            if hl then hl:Destroy() end
+            local tag = obj:FindFirstChild("ModelNameTag")
+            if tag then tag:Destroy() end
+        end
+    end
+end
+
+-- Xử lý Logic từng Frame
+local function updateModelVisuals()
+    -- Nếu tắt cả nút tổng ESP Model và Text thì không chạy update visual
+    if not espModelEnabled and not ESPTextEnabled and not modelHitboxEnabled and not modelNotifyEnabled then
+        return 
+    end
+
+    local myChar = LocalPlayer.Character
+    local myHRP = myChar and getHRP(myChar)
+    local currentTime = tick()
+
+    -- Duyệt qua cache
+    for _, model in ipairs(cachedModels) do
+        if model and model.Parent then -- Kiểm tra model còn tồn tại
+            
+            -- Chỉ xử lý nếu model này nằm trong danh sách đang bật
+            if tableContains(modelHighlightList, model.Name) then
+
+                local adornee = model:FindFirstChild("HumanoidRootPart") or model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
+                
+                if adornee then
+                    local distVal = 999999
+                    if myHRP then
+                        distVal = (myHRP.Position - adornee.Position).Magnitude
+                    end
+
+                    -- 1. HIGHLIGHT
+                    if espModelEnabled then
+                        local hl = model:FindFirstChild("ModelHighlight")
+                        if not hl then
+                            hl = Instance.new("Highlight")
+                            hl.Name = "ModelHighlight"
+                            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                            hl.FillColor = Color3.fromRGB(255,200,0)
+                            hl.OutlineColor = Color3.new(1,1,1)
+                            hl.FillTransparency = 0.55
+                            hl.OutlineTransparency = 0.05
+                            hl.Parent = model
+                        end
+                        hl.Enabled = true
+                    else
+                        -- Nếu nút tổng ESP tắt, phải xóa highlight đi
+                        local hl = model:FindFirstChild("ModelHighlight")
+                        if hl then hl:Destroy() end
+                    end
+
+                    -- 2. HITBOX
+                    if modelHitboxEnabled then
+                        local hrp = model:FindFirstChild("HumanoidRootPart")
+                        if hrp then
+                            hrp.Size = Vector3.new(modelHitboxSize, modelHitboxSize, modelHitboxSize)
+                            hrp.Transparency = 0.7
+                            hrp.CanCollide = false
+                        end
+                    end
+
+                    -- 3. TEXT ESP
+                    if ESPTextEnabled then
+                        local tag = model:FindFirstChild("ModelNameTag")
+                        if not tag then
+                            tag = Instance.new("BillboardGui")
+                            tag.Name = "ModelNameTag"
+                            tag.Adornee = adornee
+                            tag.Size = UDim2.new(0, 200, 0, 50)
+                            tag.StudsOffset = Vector3.new(0, 3, 0)
+                            tag.AlwaysOnTop = true
+                            
+                            local label = Instance.new("TextLabel", tag)
+                            label.Size = UDim2.new(1, 0, 1, 0)
+                            label.BackgroundTransparency = 1
+                            label.TextColor3 = Color3.fromRGB(255, 220, 100)
+                            label.TextStrokeTransparency = 0.5
+                            label.TextScaled = false
+                            label.TextSize = 14
+                            label.Font = Enum.Font.GothamBold
+                            tag.Parent = model
+                        end
+                        
+                        local lbl = tag:FindFirstChildOfClass("TextLabel")
+                        if lbl then
+                            lbl.Text = string.format("%s\n[%d m]", model.Name, math.floor(distVal))
+                        end
+                    else
+                        local tag = model:FindFirstChild("ModelNameTag")
+                        if tag then tag:Destroy() end
+                    end
+
+                    -- 4. NOTIFICATION
+                    if modelNotifyEnabled and distVal <= modelNotifyDistance then
+                        if currentTime - lastNotifyTime >= 3 then
+                            sendNotification("⚠️ CẢNH BÁO", "Tìm thấy: " .. model.Name .. " (" .. math.floor(distVal) .. "m)")
+                            lastNotifyTime = currentTime
+                        end
+                    end
+                end 
+            else
+                -- Nếu model có trong cache nhưng tên không còn trong list (do vừa tắt) -> Xóa visual
+                local hl = model:FindFirstChild("ModelHighlight")
+                if hl then hl:Destroy() end
+                local tag = model:FindFirstChild("ModelNameTag")
+                if tag then tag:Destroy() end
+            end
+        end 
+    end 
+end
+
+local function startModelLoop()
+    if modelESPConnection then return end
+    refreshModelCache() 
+    
+    modelESPConnection = RunService.RenderStepped:Connect(function()
+        updateModelVisuals()
+    end)
+    
+    workspace.DescendantAdded:Connect(function(obj)
+        if obj:IsA("Model") and tableContains(modelHighlightList, obj.Name) then
+            table.insert(cachedModels, obj)
+        end
+    end)
+end
+
 local function findModelsByName(name)
     local results = {}
     if not name or name=="" then return results end
@@ -281,85 +583,7 @@ local function findModelsByName(name)
     return results
 end
 
-local function applyModelHighlight()
-    if not espModelEnabled then
-        for _,obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") then
-                local hl=obj:FindFirstChild("ModelHighlight")
-                if hl then hl.Enabled=false end
-            end
-        end
-        return
-    end
-    for _,name in ipairs(modelHighlightList) do
-        for _,model in ipairs(findModelsByName(name)) do
-            local hl = model:FindFirstChild("ModelHighlight")
-            if not hl then
-                hl = Instance.new("Highlight")
-                hl.Name = "ModelHighlight"
-                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                hl.FillColor = Color3.fromRGB(255,200,0)
-                hl.OutlineColor = Color3.new(1,1,1)
-                hl.FillTransparency = 0.55
-                hl.OutlineTransparency = 0.05
-                hl.Parent = model
-            end
-            hl.Enabled = true
-        end
-    end
-end
-
-local function applyHitboxToModel(model)
-    if not model or not model:IsA("Model") then return end
-    if Players:GetPlayerFromCharacter(model) then return end
-    local hum = model:FindFirstChildOfClass("Humanoid")
-    local hrp = model:FindFirstChild("HumanoidRootPart")
-    if hum and hrp then
-        if modelHitboxEnabled then
-            hrp.Size = Vector3.new(modelHitboxSize,modelHitboxSize,modelHitboxSize)
-            hrp.Transparency = 0.7
-            hrp.CanCollide = false
-        else
-            hrp.Size = Vector3.new(2,2,1)
-            hrp.Transparency = 1
-            hrp.CanCollide = true
-        end
-    end
-end
-
-local function createTextESPForModel(model)
-    if not model or not model:IsA("Model") then return end
-    if model:FindFirstChild("NameTag") then return end
-    local adornee = model:FindFirstChild("Head") or model:FindFirstChildWhichIsA("BasePart")
-    if not adornee then return end
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "NameTag"
-    billboard.Adornee = adornee
-    billboard.Size = UDim2.new(0, 140, 0, 28)
-    billboard.StudsOffset = Vector3.new(0, 2.2, 0)
-    billboard.AlwaysOnTop = true
-    local label = Instance.new("TextLabel", billboard)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Text = model.Name
-    label.TextColor3 = Color3.fromRGB(255, 200, 80)
-    label.TextStrokeTransparency = 0.6
-    label.TextScaled = true
-    label.Font = Enum.Font.SourceSansBold
-    billboard.Parent = model
-end
-
-local function scanNPCModelsForText()
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("Model") and not Players:GetPlayerFromCharacter(obj) then
-            if obj:FindFirstChildOfClass("Humanoid") and not obj:FindFirstChild("NameTag") then
-                createTextESPForModel(obj)
-            end
-        end
-    end
-end
-
--- FOV + Aimbot (Unchanged)
+-- FOV + Aimbot
 local function ensureFOVCircle()
     if fovCircle then return end
     local ok, DrawingLib = pcall(function() return Drawing end)
@@ -396,7 +620,7 @@ local function getClosestTargetInFOV()
     return best
 end
 
--- UI Helper Functions (Unchanged)
+-- UI Helper Functions
 local function createCorner(parent, radius)
     local c = Instance.new("UICorner")
     c.CornerRadius = UDim.new(0, radius or 10)
@@ -430,7 +654,7 @@ local function createButton(parent, text, size, color, callback)
     return button
 end
 
--- Modern UI Components (Unchanged Toggle Button)
+-- Modern UI Components
 local function createToggleButton(parent, text, state, callback)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, -16, 0, 36)
@@ -482,7 +706,7 @@ local function createToggleButton(parent, text, state, callback)
     return container
 end
 
--- SLIDER ĐÃ SỬA LẦN 5 - CẢI THIỆN XỬ LÝ KÉO TRÊN MOBILE VÀ DESKTOP
+-- Slider
 local function createSlider(parent, text, value, min, max, callback)
     local container = Instance.new("Frame")
     container.Size = UDim2.new(1, -12, 0, 48)
@@ -531,7 +755,6 @@ local function createSlider(parent, text, value, min, max, callback)
     createCorner(handle, 8)
     createStroke(handle, 2, Color3.fromRGB(100, 150, 255))
     
-    -- KHUNG TƯƠNG TÁC
     local interactionFrame = Instance.new("TextButton")
     interactionFrame.Name = "InteractionFrame"
     interactionFrame.Size = UDim2.new(1, 0, 1, 0) 
@@ -606,7 +829,6 @@ local function createSlider(parent, text, value, min, max, callback)
     
     return container
 end
-
 
 local function createColorPicker(parent)
     local container = Instance.new("Frame")
@@ -702,8 +924,136 @@ local function createActionButton(parent, text, callback)
     return btn
 end
 
--- Build Menu (Unchanged)
+-- #############################################
+-- HÀM FLY MODE V3 (ĐÃ FIX CHO MOBILE & PC)
+-- #############################################
+local function startFlyModeV3()
+    local chr = LocalPlayer.Character
+    local hum = getHumanoid(chr)
+    -- Nếu không tìm thấy nhân vật, thử tìm lại một lần nữa
+    if not chr or not hum then 
+        chr = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        hum = getHumanoid(chr)
+        if not chr or not hum then return end -- Vẫn không có thì thoát
+    end
+    
+    -- Reset trạng thái để tránh lỗi chồng chéo
+    if flyConn then flyConn:Disconnect() end
+    if flyControlConnection then flyControlConnection:Disconnect() end
+    
+    -- Set trạng thái vật lý
+    for i, state in ipairs(Enum.HumanoidStateType:GetEnumItems()) do
+        if state ~= Enum.HumanoidStateType.None then
+            hum:SetStateEnabled(state, false)
+        end
+    end
+    hum:ChangeState(Enum.HumanoidStateType.Swimming)
+    
+    local targetPart = (chr.ClassName == "Model" and chr:FindFirstChild("UpperTorso")) or (chr.ClassName == "Model" and chr:FindFirstChild("Torso")) or getHRP(chr)
+    if not targetPart then return end
+    
+    if targetPart:FindFirstChild("BodyGyro") then targetPart.BodyGyro:Destroy() end
+    if targetPart:FindFirstChild("BodyVelocity") then targetPart.BodyVelocity:Destroy() end
+    
+    local bg = Instance.new("BodyGyro", targetPart)
+    bg.P = 9e4
+    bg.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bg.CFrame = targetPart.CFrame
+    
+    local bv = Instance.new("BodyVelocity", targetPart)
+    bv.Velocity = Vector3.new(0, 0, 0)
+    bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+
+    hum.PlatformStand = true
+
+    -- Control cho PC (Keyboard)
+    flyControlConnection = UserInputService.InputChanged:Connect(function(input)
+        if not miscFlyEnabled then return end
+        local key = input.KeyCode
+        local isDown = input.UserInputState == Enum.UserInputState.Begin
+        
+        if key == Enum.KeyCode.W then flyControl.f = isDown and 1 or 0
+        elseif key == Enum.KeyCode.S then flyControl.b = isDown and -1 or 0
+        elseif key == Enum.KeyCode.A then flyControl.l = isDown and -1 or 0
+        elseif key == Enum.KeyCode.D then flyControl.r = isDown and 1 or 0
+        elseif key == Enum.KeyCode.Space then flyControl.u = isDown and 1 or 0
+        elseif key == Enum.KeyCode.LeftShift or key == Enum.KeyCode.RightShift then flyControl.d = isDown and -1 or 0
+        end
+    end)
+    
+    flyConn = RunService.RenderStepped:Connect(function()
+        -- Kiểm tra an toàn
+        if not miscFlyEnabled or not targetPart.Parent or not targetPart:FindFirstChild("BodyGyro") then
+            stopFlyModeV3()
+            return
+        end
+        
+        local currentSpeed = flySpeedV3
+        
+        -- Vector di chuyển từ bàn phím (PC)
+        local keyVector = Vector3.new(
+            flyControl.l + flyControl.r, 
+            flyControl.u + flyControl.d, 
+            flyControl.f + flyControl.b  
+        )
+        
+        local cameraCF = Camera.CFrame
+        
+        if keyVector.Magnitude > 0 then
+            -- Logic PC: Di chuyển theo hướng camera + phím bấm
+            local direction = (cameraCF.LookVector * keyVector.Z) + (cameraCF.RightVector * keyVector.X) + (cameraCF.UpVector * keyVector.Y)
+            bv.Velocity = direction.Unit * currentSpeed
+            bg.CFrame = cameraCF * CFrame.Angles(-math.rad((flyControl.f + flyControl.b) * 10), 0, 0)
+        elseif hum.MoveDirection.Magnitude > 0 then
+            -- Logic Mobile: Di chuyển theo Joystick (MoveDirection)
+            bv.Velocity = hum.MoveDirection * currentSpeed
+            -- Xoay người theo hướng camera nhìn
+            bg.CFrame = Camera.CFrame
+        else
+            -- Đứng yên
+            bv.Velocity = Vector3.new(0, 0, 0)
+            bg.CFrame = Camera.CFrame 
+        end
+    end)
+end
+
+local function stopFlyModeV3()
+    if flyConn then 
+        flyConn:Disconnect() 
+        flyConn = nil 
+    end
+    if flyControlConnection then 
+        flyControlConnection:Disconnect() 
+        flyControlConnection = nil 
+    end
+    
+    local chr = LocalPlayer.Character
+    if chr then
+        local hum = getHumanoid(chr)
+        local targetPart = (chr.ClassName == "Model" and chr:FindFirstChild("UpperTorso")) or (chr.ClassName == "Model" and chr:FindFirstChild("Torso")) or getHRP(chr)
+        
+        if targetPart then
+            if targetPart:FindFirstChild("BodyGyro") then targetPart.BodyGyro:Destroy() end
+            if targetPart:FindFirstChild("BodyVelocity") then targetPart.BodyVelocity:Destroy() end
+        end
+
+        if hum then
+            hum.PlatformStand = false
+            for i, state in ipairs(Enum.HumanoidStateType:GetEnumItems()) do
+                hum:SetStateEnabled(state, true)
+            end
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end
+    end
+    flyControl = {f = 0, b = 0, l = 0, r = 0, u = 0, d = 0} 
+end
+-- #############################################
+-- KẾT THÚC HÀM FLY MODE V3
+
+-- Build Menu
 local function createMenu()
+    saveOriginalLighting() -- Save lighting state on load
+
     if CoreGui:FindFirstChild("ModernUtilityMenu") then 
         CoreGui.ModernUtilityMenu:Destroy() 
     end
@@ -750,7 +1100,7 @@ local function createMenu()
     title.Size = UDim2.new(1, -20, 1, 0)
     title.Position = UDim2.new(0, 12, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "🛠️ Utility Menu"
+    title.Text = "🛠️ Menu 4.5 (Final Fix Model/Light)"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 14
@@ -862,13 +1212,12 @@ local function createMenu()
         end
     end
 
-    -- ESP Tab (UPDATED)
+    -- ESP Tab
     local function showESP()
         clearContent()
         setActiveTab("ESP")
         showingModelList = false
         
-        -- Player ESP (Highlight + Team Filter)
         createToggleButton(contentFrame, "Highlight Players", highlightEnabled, function(state)
             highlightEnabled = state
             for _, p in ipairs(Players:GetPlayers()) do
@@ -890,8 +1239,8 @@ local function createMenu()
         
         createColorPicker(contentFrame)
 
-        --- === NEW ESP TEXT FEATURES OPTIMIZED FOR LAG ===
-        local function toggleESPTextLoop(state)
+        --- === ESP TEXT FEATURES ===
+        local function toggleESPTextLoop()
             local enabled = espNameEnabled or espHealthEnabled or espDistanceEnabled
             if enabled then
                 startESPTextLoop()
@@ -914,16 +1263,15 @@ local function createMenu()
             espDistanceEnabled = state
             toggleESPTextLoop()
         end)
-        -- ===============================================
     end
 
-    -- Combat Tab (Unchanged)
+    -- Combat Tab
     local function showCombat()
         clearContent()
         setActiveTab("Combat")
         showingModelList = false
         
-        createToggleButton(contentFrame, "Hitbox Expander", hitboxEnabled, function(state)
+        createToggleButton(contentFrame, "Body Hitbox Expander", hitboxEnabled, function(state)
             hitboxEnabled = state
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= LocalPlayer and p.Character then
@@ -932,9 +1280,29 @@ local function createMenu()
             end
         end)
         
-        createSlider(contentFrame, "Hitbox Size", hitboxSize, 2, 100, function(val)
+        createSlider(contentFrame, "Body Hitbox Size", hitboxSize, 2, 100, function(val)
             hitboxSize = val
             if hitboxEnabled then
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p ~= LocalPlayer and p.Character then
+                        applyHitboxToCharacter(p, p.Character)
+                    end
+                end
+            end
+        end)
+        
+        createToggleButton(contentFrame, "Head Hitbox Expander", headHitboxEnabled, function(state)
+            headHitboxEnabled = state
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then
+                    applyHitboxToCharacter(p, p.Character)
+                end
+            end
+        end)
+        
+        createSlider(contentFrame, "Head Hitbox Size", headHitboxSize, 1, 30, function(val)
+            headHitboxSize = val
+            if headHitboxEnabled then
                 for _, p in ipairs(Players:GetPlayers()) do
                     if p ~= LocalPlayer and p.Character then
                         applyHitboxToCharacter(p, p.Character)
@@ -961,12 +1329,171 @@ local function createMenu()
         end)
     end
 
-    -- Misc Tab (UPDATED FPS BOOSTER)
+    -- Function Tab
+    local function showFunction()
+        clearContent()
+        setActiveTab("Function")
+        showingModelList = false
+
+        createToggleButton(contentFrame, "God Mode (Bất Tử)", godModeEnabled, function(state)
+            godModeEnabled = state
+            if state then
+                if godModeConnection then godModeConnection:Disconnect() end
+                
+                local hum = getHumanoid(LocalPlayer.Character)
+                if hum then
+                    hum.BreakJointsOnDeath = false 
+                    hum.HealthChanged:Connect(function()
+                        if godModeEnabled and hum.Health < hum.MaxHealth then
+                            hum.Health = hum.MaxHealth
+                        end
+                    end)
+                end
+
+                godModeConnection = RunService.Stepped:Connect(function()
+                    if godModeEnabled and LocalPlayer.Character then
+                        local h = getHumanoid(LocalPlayer.Character)
+                        if h then
+                            h.Health = h.MaxHealth
+                            h:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+                        end
+                    else
+                         if godModeConnection then godModeConnection:Disconnect() end
+                    end
+                end)
+            else
+                if godModeConnection then 
+                    godModeConnection:Disconnect() 
+                    godModeConnection = nil
+                end
+            end
+        end)
+
+        createToggleButton(contentFrame, "Invisible (Ghost Mode)", invisibleEnabled, function(state)
+            invisibleEnabled = state
+            if state then
+                if invisibleConnection then invisibleConnection:Disconnect() end
+                invisibleConnection = RunService.Stepped:Connect(function()
+                    if invisibleEnabled and LocalPlayer.Character then
+                        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                            if part:IsA("BasePart") then
+                                part.Transparency = 1
+                                part.CanCollide = false
+                            elseif part:IsA("Decal") or part:IsA("Texture") then
+                                part.Transparency = 1
+                            end
+                        end
+                    else
+                         if invisibleConnection then invisibleConnection:Disconnect() end
+                    end
+                end)
+            else
+                if invisibleConnection then 
+                    invisibleConnection:Disconnect() 
+                    invisibleConnection = nil
+                end
+                if LocalPlayer.Character then
+                    for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            if part.Name == "HumanoidRootPart" then
+                                part.Transparency = 1
+                            else
+                                part.Transparency = 0
+                                part.CanCollide = true
+                            end
+                        elseif part:IsA("Decal") or part:IsA("Texture") then
+                            part.Transparency = 0
+                        end
+                    end
+                end
+            end
+        end)
+        
+        createToggleButton(contentFrame, "Instant Interact (Giữ E)", instantPromptEnabled, function(state)
+            instantPromptEnabled = state
+            if state then
+                if instantPromptConnection then instantPromptConnection:Disconnect() end
+                for _, v in pairs(workspace:GetDescendants()) do
+                    if v:IsA("ProximityPrompt") then v.HoldDuration = 0 end
+                end
+                instantPromptConnection = workspace.DescendantAdded:Connect(function(v)
+                    if instantPromptEnabled and v:IsA("ProximityPrompt") then
+                        v.HoldDuration = 0
+                    end
+                end)
+            else
+                if instantPromptConnection then 
+                    instantPromptConnection:Disconnect() 
+                    instantPromptConnection = nil
+                end
+            end
+        end)
+
+        createToggleButton(contentFrame, "Spinbot", spinBotEnabled, function(state)
+            spinBotEnabled = state
+            if state then
+                if spinBotConnection then spinBotConnection:Disconnect() end
+                spinBotConnection = RunService.RenderStepped:Connect(function()
+                    if spinBotEnabled and LocalPlayer.Character then
+                        local hrp = getHRP(LocalPlayer.Character)
+                        if hrp then
+                            hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(spinBotSpeed), 0)
+                        end
+                    else
+                        if spinBotConnection then spinBotConnection:Disconnect() end
+                    end
+                end)
+            else
+                if spinBotConnection then
+                    spinBotConnection:Disconnect()
+                    spinBotConnection = nil
+                end
+            end
+        end)
+
+        createSlider(contentFrame, "Spin Speed", spinBotSpeed, 1, 100, function(val)
+            spinBotSpeed = val
+        end)
+    end
+
+    -- Misc Tab
     local function showMisc()
         clearContent()
         setActiveTab("Misc")
         showingModelList = false
         
+        createToggleButton(contentFrame, "Full Bright (Sáng)", miscFullBrightEnabled, function(state)
+            miscFullBrightEnabled = state
+            if state then
+                saveOriginalLighting() -- Save before change
+                if fullBrightConnection then fullBrightConnection:Disconnect() end
+                fullBrightConnection = RunService.RenderStepped:Connect(function()
+                    Lighting.Brightness = 2
+                    Lighting.ClockTime = 14
+                    Lighting.GlobalShadows = false
+                    Lighting.Ambient = Color3.fromRGB(255, 255, 255)
+                    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+                end)
+            else
+                if fullBrightConnection then 
+                    fullBrightConnection:Disconnect() 
+                    fullBrightConnection = nil
+                end
+                restoreLighting() -- Restore original
+            end
+        end)
+
+        createToggleButton(contentFrame, "No Fog (Xóa Mù)", miscFogEnabled, function(state)
+            miscFogEnabled = state
+            if state then
+                saveOriginalLighting()
+                Lighting.FogEnd = 1000000
+                Lighting.FogStart = 0
+            else
+                restoreFog()
+            end
+        end)
+
         createToggleButton(contentFrame, "Infinite Jump", miscInfiniteJump, function(state)
             miscInfiniteJump = state
         end)
@@ -997,234 +1524,62 @@ local function createMenu()
                 end
             end
         end)
-        
-        createToggleButton(contentFrame, "Fly Mode", miscFlyEnabled, function(state)
-            miscFlyEnabled = state
+
+        createToggleButton(contentFrame, "Bring All (Client/Hit)", miscBringAllEnabled, function(state)
+            miscBringAllEnabled = state
             if state then
-                if flyConn then flyConn:Disconnect() end
-                flyConn = RunService.RenderStepped:Connect(function()
-                    local hrp = getHRP(LocalPlayer.Character)
-                    if not hrp then return end
-                    local cam = Camera
-                    local move = Vector3.new()
-                    if UserInputService:IsKeyDown(Enum.KeyCode.W) then move += cam.CFrame.LookVector end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.S) then move -= cam.CFrame.LookVector end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.A) then move -= cam.CFrame.RightVector end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.D) then move += cam.CFrame.RightVector end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move += cam.CFrame.UpVector end
-                    if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then move -= cam.CFrame.UpVector end
-                    if move.Magnitude > 0 then
-                        hrp.CFrame = hrp.CFrame + move.Unit * (miscFlySpeed/10)
+                if bringAllConnection then bringAllConnection:Disconnect() end
+                bringAllConnection = RunService.Stepped:Connect(function()
+                    if not miscBringAllEnabled then 
+                        if bringAllConnection then bringAllConnection:Disconnect() end
+                        return 
+                    end
+                    
+                    local myRoot = getHRP(LocalPlayer.Character)
+                    if not myRoot then return end
+                    
+                    for _, p in ipairs(Players:GetPlayers()) do
+                        if p ~= LocalPlayer and isAlive(p) then
+                            if not (teamFilterEnabled and sameTeam(p, LocalPlayer)) then
+                                local targetRoot = getHRP(p.Character)
+                                if targetRoot then
+                                    targetRoot.CFrame = myRoot.CFrame * CFrame.new(0, 0, -6)
+                                    targetRoot.Velocity = Vector3.new(0,0,0) 
+                                    targetRoot.AssemblyLinearVelocity = Vector3.new(0,0,0)
+                                end
+                            end
+                        end
                     end
                 end)
             else
-                if flyConn then flyConn:Disconnect() flyConn = nil end
+                if bringAllConnection then 
+                    bringAllConnection:Disconnect()
+                    bringAllConnection = nil
+                end
             end
         end)
         
-        createSlider(contentFrame, "Fly Speed", miscFlySpeed, 10, 200, function(val)
-            miscFlySpeed = val
-        end)
-        
-        -- >>> TÍNH NĂNG FPS BOOSTER ĐÃ NÂNG CẤP <<<
-        createActionButton(contentFrame, "FPS Booster (Nâng Cấp)", function()
-            local lighting = game:GetService("Lighting")
-            lighting.GlobalShadows = false
-            lighting.FogEnd = 1e9
-            lighting.Brightness = 1
-            for _,v in ipairs(lighting:GetChildren()) do
-                if v:IsA("PostEffect") then v.Enabled = false end
-            end
-            local terrain = workspace:FindFirstChildOfClass("Terrain")
-            if terrain then
-                terrain.WaterWaveSize = 0
-                terrain.WaterWaveSpeed = 0
-                terrain.WaterReflectance = 0
-                terrain.WaterTransparency = 1
-            end
-            
-            for _,v in ipairs(workspace:GetDescendants()) do
-                -- Vô hiệu hóa các hiệu ứng ngốn FPS (hạt, vệt, tia sáng)
-                if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
-                    v.Enabled = false
-                -- Tắt Decal/Texture (Hình ảnh trang trí)
-                elseif v:IsA("Decal") or v:IsA("Texture") then
-                    v.Transparency = 1
-                -- Giảm chất lượng Render của các mô hình Mesh
-                elseif v:IsA("MeshPart") then
-                    v.RenderFidelity = Enum.RenderFidelity.Performance
-                end
-            end
-            print("✅ FPS Booster Activated! Maximized visual performance for minimal lag.")
-        end)
-        -- ==============================================
-
-        --------------------------------------------------------
-        -- PLAYER INTERACTION SECTION (Teleport & Follow)
-        --------------------------------------------------------
-        
-        local playerInteractionFrame = Instance.new("Frame")
-        playerInteractionFrame.Size = UDim2.new(1, -16, 0, 190)
-        playerInteractionFrame.BackgroundColor3 = Color3.fromRGB(50, 53, 72)
-        playerInteractionFrame.BorderSizePixel = 0
-        playerInteractionFrame.Parent = contentFrame
-        createCorner(playerInteractionFrame, 6)
-        createStroke(playerInteractionFrame, 1, Color3.fromRGB(80, 85, 130))
-        
-        local headerLabel = Instance.new("TextLabel")
-        headerLabel.Size = UDim2.new(1, -16, 0, 16)
-        headerLabel.Position = UDim2.new(0, 8, 0, 6)
-        headerLabel.BackgroundTransparency = 1
-        headerLabel.Text = "Target: " .. (currentTargetPlayer and currentTargetPlayer.Name or "None")
-        headerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        headerLabel.Font = Enum.Font.GothamBold
-        headerLabel.TextSize = 14
-        headerLabel.TextXAlignment = Enum.TextXAlignment.Left
-        headerLabel.Parent = playerInteractionFrame
-
-        -- ******* LIST PLAYER *******
-        
-        local playerList = Instance.new("ScrollingFrame")
-        playerList.Size = UDim2.new(1, -16, 0, 100)
-        playerList.Position = UDim2.new(0, 8, 0, 24)
-        playerList.BackgroundTransparency = 0.8
-        playerList.BackgroundColor3 = Color3.fromRGB(30, 33, 48)
-        playerList.CanvasSize = UDim2.new(0, 0, 0, 0)
-        playerList.ScrollBarThickness = 4
-        playerList.ScrollBarImageColor3 = Color3.fromRGB(100, 110, 180)
-        playerList.Parent = playerInteractionFrame
-        createCorner(playerList, 4)
-        
-        local listLayout = Instance.new("UIListLayout")
-        listLayout.Padding = UDim.new(0, 2)
-        listLayout.Parent = playerList
-        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-
-        local function updatePlayerList()
-            for _, child in ipairs(playerList:GetChildren()) do
-                if child:IsA("TextButton") then
-                    child:Destroy()
-                end
-            end
-            
-            local players = Players:GetPlayers()
-            local listHeight = 0
-            
-            for _, player in ipairs(players) do
-                if player ~= LocalPlayer and player.Character then
-                    local button = Instance.new("TextButton")
-                    button.Size = UDim2.new(1, 0, 0, 18)
-                    button.BackgroundColor3 = (currentTargetPlayer == player) and Color3.fromRGB(100, 150, 255) or Color3.fromRGB(50, 53, 72)
-                    button.Text = player.Name .. ((currentTargetPlayer == player) and " (Selected)" or "")
-                    button.TextColor3 = Color3.fromRGB(240, 242, 250)
-                    button.Font = Enum.Font.GothamMedium
-                    button.TextSize = 11
-                    button.TextXAlignment = Enum.TextXAlignment.Left
-                    button.AutoButtonColor = false
-                    button.Parent = playerList
-                    
-                    local padding = Instance.new("UIPadding")
-                    padding.PaddingLeft = UDim.new(0, 5)
-                    padding.Parent = button
-
-                    button.MouseButton1Click:Connect(function()
-                        currentTargetPlayer = player
-                        headerLabel.Text = "Target: " .. player.Name
-                        updatePlayerList() 
-                    end)
-                    
-                    listHeight = listHeight + 18 + 2
-                end
-            end
-            
-            playerList.CanvasSize = UDim2.new(0, 0, 0, listHeight)
-        end
-        
-        updatePlayerList()
-        Players.PlayerAdded:Connect(updatePlayerList)
-        Players.PlayerRemoving:Connect(updatePlayerList)
-
-        local tpButton = createButton(playerInteractionFrame, "Teleport to Target", 
-        UDim2.new(0.48, 0, 0, 32), Color3.fromRGB(100, 150, 255), function()
-            if currentTargetPlayer and currentTargetPlayer.Character and LocalPlayer.Character then
-                local targetHRP = getHRP(currentTargetPlayer.Character)
-                local localHRP = getHRP(LocalPlayer.Character)
-                if targetHRP and localHRP then
-                    local targetCFrame = targetHRP.CFrame * CFrame.new(0, 0, -5)
-                    localHRP.CFrame = targetCFrame
-                end
+        createToggleButton(contentFrame, "Fly Mode V3 (Mobile Fix)", miscFlyEnabled, function(state)
+            miscFlyEnabled = state
+            if state then
+                startFlyModeV3()
             else
-                headerLabel.Text = "Target: (Select Target First!)"
+                stopFlyModeV3()
             end
         end)
-        tpButton.Position = UDim2.new(0, 8, 0, 134)
         
-        local followButton = createButton(playerInteractionFrame, "Toggle Follow", 
-        UDim2.new(0.48, 0, 0, 32), isFollowingPlayer and Color3.fromRGB(150, 200, 255) or Color3.fromRGB(200, 100, 255), function()
-            
-            if not currentTargetPlayer then
-                headerLabel.Text = "Target: (Select Target First!)"
-                return
-            end
-            
-            isFollowingPlayer = not isFollowingPlayer
-            
-            if isFollowingPlayer then
-                followButton.BackgroundColor3 = Color3.fromRGB(150, 200, 255)
-                followButton.Text = "Following: " .. currentTargetPlayer.Name
-            else
-                followButton.BackgroundColor3 = Color3.fromRGB(200, 100, 255)
-                followButton.Text = "Toggle Follow"
-            end
-            
-            if isFollowingPlayer and currentTargetPlayer then
-                local function startFollowLoop()
-                    if followConnection then followConnection:Disconnect() end
-                    
-                    followConnection = RunService.Heartbeat:Connect(function(dt)
-                        if not isFollowingPlayer or not currentTargetPlayer or not currentTargetPlayer.Character or not LocalPlayer.Character then
-                            if followConnection then followConnection:Disconnect() end
-                            isFollowingPlayer = false
-                            followButton.BackgroundColor3 = Color3.fromRGB(200, 100, 255)
-                            followButton.Text = "Toggle Follow"
-                            return
-                        end
-
-                        local targetHRP = getHRP(currentTargetPlayer.Character)
-                        local localHRP = getHRP(LocalPlayer.Character)
-                        
-                        if not targetHRP or not localHRP then return end
-
-                        local targetPos = targetHRP.Position
-                        local currentPos = localHRP.Position
-                        local direction = (targetPos - currentPos)
-                        
-                        if direction.Magnitude < 8 then
-                            localHRP.Velocity = Vector3.new(0,0,0)
-                        else
-                            local normalizedDirection = direction.Unit
-                            localHRP.CFrame = localHRP.CFrame + normalizedDirection * followSpeed * dt
-                        end
-                    end)
-                end
-                startFollowLoop()
-            else
-                if followConnection then 
-                    followConnection:Disconnect() 
-                    followConnection = nil
-                end
-            end
+        createSlider(contentFrame, "Fly Speed V3", flySpeedV3, 10, 200, function(val)
+            flySpeedV3 = val
         end)
-        followButton.Position = UDim2.new(0.52, 4, 0, 134)
-        
-        --------------------------------------------------------
     end
 
-    -- ESP Model Tab (Unchanged)
+    -- ESP Model Tab (FIXED)
     local function showModel()
         clearContent()
         setActiveTab("Model")
         
+        startModelLoop() -- Đảm bảo Loop chạy
+
         if showingModelList then
             createActionButton(contentFrame, "← Back", function()
                 showingModelList = false
@@ -1270,15 +1625,13 @@ local function createMenu()
                         btn.MouseButton1Click:Connect(function()
                             if not tableContains(modelHighlightList, obj.Name) then
                                 table.insert(modelHighlightList, obj.Name)
-                                applyModelHighlight()
+                                refreshModelCache() 
                                 btn.BackgroundColor3 = Color3.fromRGB(70, 150, 70)
                                 btn.Text = "✓ " .. obj.Name
                             else
                                 tableRemoveValue(modelHighlightList, obj.Name)
-                                for _,m in ipairs(findModelsByName(obj.Name)) do
-                                    local hl = m:FindFirstChild("ModelHighlight")
-                                    if hl then hl:Destroy() end
-                                end
+                                clearSpecificModelVisuals(obj.Name) -- FIX: Xóa ngay lập tức
+                                refreshModelCache() 
                                 btn.BackgroundColor3 = Color3.fromRGB(40, 43, 62)
                                 btn.Text = "   " .. obj.Name
                             end
@@ -1298,78 +1651,59 @@ local function createMenu()
                 noModelsLabel.Parent = contentFrame
             end
         else
-            createToggleButton(contentFrame, "ESP Model", espModelEnabled, function(state)
+            createToggleButton(contentFrame, "Enable Model ESP (Highlight)", espModelEnabled, function(state)
                 espModelEnabled = state
-                if state then
-                    applyModelHighlight()
-                else
-                    for _,m in ipairs(workspace:GetDescendants()) do
-                        if m:IsA("Model") then
-                            local hl = m:FindFirstChild("ModelHighlight")
-                            if hl then hl.Enabled = false end
-                        end
-                    end
-                end
+                if not state then clearAllModelVisuals() end -- FIX: Xóa sạch khi tắt
             end)
             
             createToggleButton(contentFrame, "Model Hitbox (NPC)", modelHitboxEnabled, function(state)
                 modelHitboxEnabled = state
-                for _,obj in ipairs(workspace:GetDescendants()) do
-                    applyHitboxToModel(obj)
-                end
+                if not state then clearAllModelVisuals() end
             end)
             
             createSlider(contentFrame, "Model Hitbox Size", modelHitboxSize, 2, 20, function(val)
                 modelHitboxSize = val
-                if modelHitboxEnabled then
-                    for _,obj in ipairs(workspace:GetDescendants()) do
-                        applyHitboxToModel(obj)
-                    end
-                end
             end)
             
-            createToggleButton(contentFrame, "ESP Text NPC", ESPTextEnabled, function(state)
+            createToggleButton(contentFrame, "ESP Text & Distance", ESPTextEnabled, function(state)
                 ESPTextEnabled = state
-                if state then
-                    if ESPTextConnection then ESPTextConnection:Disconnect() end
-                    ESPTextConnection = RunService.Heartbeat:Connect(scanNPCModelsForText)
-                else
-                    if ESPTextConnection then ESPTextConnection:Disconnect() ESPTextConnection = nil end
-                    for _, v in ipairs(workspace:GetDescendants()) do
-                        if v:IsA("Model") and v:FindFirstChild("NameTag") then
-                            v.NameTag:Destroy()
-                        end
-                    end
-                end
+                if not state then clearAllModelVisuals() end
+            end)
+
+            createToggleButton(contentFrame, "Proximity Alert (Báo Gần)", modelNotifyEnabled, function(state)
+                modelNotifyEnabled = state
+            end)
+
+            createSlider(contentFrame, "Alert Distance", modelNotifyDistance, 10, 500, function(val)
+                modelNotifyDistance = val
             end)
             
-            createActionButton(contentFrame, "List Models", function()
+            createActionButton(contentFrame, "Select Models List", function()
                 showingModelList = true
                 showModel()
             end)
         end
     end
 
-    -- Create Tab Buttons
     local espBtn = createTabButton("ESP", "👁️")
     local combatBtn = createTabButton("Combat", "⚔️")
+    local functionBtn = createTabButton("Function", "⚙️")
     local miscBtn = createTabButton("Misc", "🔧")
     local modelBtn = createTabButton("Model", "📦")
 
     espBtn.MouseButton1Click:Connect(showESP)
     combatBtn.MouseButton1Click:Connect(showCombat)
+    functionBtn.MouseButton1Click:Connect(showFunction)
     miscBtn.MouseButton1Click:Connect(showMisc)
     modelBtn.MouseButton1Click:Connect(showModel)
 
-    -- Show default tab
-    showESP()
+    showMisc()
 end
 
--- Init
-for _,p in ipairs(Players:GetPlayers()) do setupPlayerConnections(p) end
 Players.PlayerAdded:Connect(setupPlayerConnections)
+for _,p in ipairs(Players:GetPlayers()) do setupPlayerConnections(p) end
+
 Players.PlayerRemoving:Connect(function(p)
-    -- Xóa tag text khi người chơi rời đi
     if playerTextTags[p] then 
         playerTextTags[p]:Destroy() 
         playerTextTags[p] = nil 
@@ -1381,33 +1715,32 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     local hum = getHumanoid(char)
     if hum then
         if miscSpeedEnabled then hum.WalkSpeed = miscSpeedValue else hum.WalkSpeed = originalWalkSpeed end
+        
+        hum.Died:Connect(function()
+            if miscFlyEnabled then stopFlyModeV3(); miscFlyEnabled = false end
+            if isFollowingPlayer then isFollowingPlayer = false; if followConnection then followConnection:Disconnect() end end
+            if miscBringAllEnabled then miscBringAllEnabled = false; if bringAllConnection then bringAllConnection:Disconnect() end end
+            if godModeEnabled then godModeEnabled = false; if godModeConnection then godModeConnection:Disconnect() end end
+            if spinBotEnabled then spinBotEnabled = false; if spinBotConnection then spinBotConnection:Disconnect() end end
+            if invisibleEnabled then invisibleEnabled = false; if invisibleConnection then invisibleConnection:Disconnect() end end
+        end)
     end
 end)
 
--- Maintenance loop (Cập nhật Highlight/Hitbox/ESP Text nếu cần) - Tối ưu hóa
 task.spawn(function()
     while true do
         task.wait(1.5)
         local esp_enabled = espNameEnabled or espHealthEnabled or espDistanceEnabled
         for _,p in ipairs(Players:GetPlayers()) do 
             if p.Character then
-                -- Đảm bảo Highlight luôn được áp dụng nếu bật
                 addPlayerHighlight(p) 
                 applyHitboxToCharacter(p, p.Character)
-                
-                -- Đảm bảo ESP Text được tạo lại nếu vừa hồi sinh
-                if esp_enabled and not playerTextTags[p] then
-                    updatePlayerTextESP(p)
-                end
+                if esp_enabled then updatePlayerTextESP(p) end
             end
         end
-        
-        if espModelEnabled and #modelHighlightList > 0 then applyModelHighlight() end
-        for _,obj in ipairs(workspace:GetDescendants()) do applyHitboxToModel(obj) end
     end
 end)
 
--- Infinite jump (Unchanged)
 UserInputService.JumpRequest:Connect(function()
     if miscInfiniteJump then
         local hum = getHumanoid(LocalPlayer.Character)
@@ -1415,7 +1748,6 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
--- Noclip (Unchanged)
 RunService.Stepped:Connect(function()
     if miscNoclip then
         local char = LocalPlayer.Character
@@ -1427,7 +1759,6 @@ RunService.Stepped:Connect(function()
     end
 end)
 
--- FOV + Aimbot loop (Unchanged)
 RunService.RenderStepped:Connect(function()
     if fovEnabled then
         ensureFOVCircle()
@@ -1473,6 +1804,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Create UI
 createMenu()
-print("✅ Modern Utility Menu loaded successfully! (ESP Name/Health/Distance/Hitbox Lag Optimizations and Enhanced FPS Booster Applied)")
+print("✅ Script Loaded: Model ESP Fix + Lighting Restore")
+
